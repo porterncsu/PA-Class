@@ -1,0 +1,216 @@
+---
+title: "Diabetes Dataset Summary"
+output:
+  html_notebook: default
+  html_document: default
+---
+
+This notebook provides a summary of the diabetes health indicators dataset from BRFSS 2015.
+
+## Load Libraries and Data
+
+```{r message=FALSE, warning=FALSE}
+# Load required libraries
+library(tidyverse)
+library(skimr)
+library(corrplot)
+```
+
+```{r message=FALSE}
+# Load the dataset
+diabetes <- read_csv("diabetes_binary_health_indicators_BRFSS2015_sample70000.csv")
+
+# Display first few rows
+head(diabetes)
+```
+
+## Dataset Dimensions
+
+```{r}
+# Number of observations and variables
+cat("Number of observations:", nrow(diabetes), "\n")
+cat("Number of variables:", ncol(diabetes), "\n")
+```
+
+## Data Structure
+
+```{r}
+# View data structure
+str(diabetes)
+```
+
+## Summary Statistics
+
+```{r}
+# Basic summary statistics
+summary(diabetes)
+```
+
+```{r}
+# Detailed summary using skimr
+skim(diabetes)
+```
+
+## Missing Values
+
+```{r}
+# Check for missing values
+missing_counts <- colSums(is.na(diabetes))
+cat("Total missing values:", sum(missing_counts), "\n\n")
+
+# Show missing values by column (if any)
+if (sum(missing_counts) > 0) {
+  print(missing_counts[missing_counts > 0])
+} else {
+  cat("No missing values in the dataset.")
+}
+```
+
+## Target Variable Distribution
+
+```{r}
+# Distribution of diabetes_binary
+diabetes %>%
+  count(diabetes_binary) %>%
+  mutate(percentage = n / sum(n) * 100)
+```
+
+```{r}
+# Visualize target variable
+ggplot(diabetes, aes(x = factor(diabetes_binary), fill = factor(diabetes_binary))) +
+  geom_bar() +
+  scale_fill_manual(values = c("0" = "steelblue", "1" = "coral"),
+                    labels = c("No Diabetes", "Diabetes")) +
+  labs(title = "Distribution of Diabetes Status",
+       x = "Diabetes Status",
+       y = "Count",
+       fill = "Status") +
+  theme_minimal() +
+  scale_x_discrete(labels = c("No Diabetes", "Diabetes"))
+```
+
+## Distribution of Numeric Variables
+
+```{r}
+# BMI distribution
+ggplot(diabetes, aes(x = bmi)) +
+  geom_histogram(binwidth = 2, fill = "steelblue", color = "white") +
+  labs(title = "Distribution of BMI",
+       x = "BMI",
+       y = "Count") +
+  theme_minimal()
+```
+
+```{r}
+# Age distribution
+ggplot(diabetes, aes(x = factor(age))) +
+  geom_bar(fill = "steelblue") +
+  labs(title = "Distribution of Age Category",
+       x = "Age Category (1-13)",
+       y = "Count") +
+  theme_minimal()
+```
+
+```{r}
+# Income distribution
+ggplot(diabetes, aes(x = factor(income))) +
+  geom_bar(fill = "steelblue") +
+  labs(title = "Distribution of Income Category",
+       x = "Income Category (1-8)",
+       y = "Count") +
+  theme_minimal()
+```
+
+## Binary Variables Summary
+
+```{r}
+# Calculate proportions for binary variables
+binary_vars <- c("high_bp", "high_chol", "smoker", "stroke",
+                 "heart_diseaseor_attack", "phys_activity", "fruits",
+                 "veggies", "hvy_alcohol_consump", "any_healthcare",
+                 "no_docbc_cost", "diff_walk", "sex")
+
+binary_summary <- diabetes %>%
+  select(all_of(binary_vars)) %>%
+  summarise(across(everything(), ~ mean(. == 1) * 100)) %>%
+  pivot_longer(everything(), names_to = "Variable", values_to = "Percentage_Yes")
+
+print(binary_summary, n = Inf)
+```
+
+```{r}
+# Visualize binary variables
+ggplot(binary_summary, aes(x = reorder(Variable, Percentage_Yes), y = Percentage_Yes)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Percentage 'Yes' for Binary Variables",
+       x = "Variable",
+       y = "Percentage (%)") +
+  theme_minimal()
+```
+
+## Correlation Analysis
+
+```{r fig.width=10, fig.height=10}
+# Compute correlation matrix
+cor_matrix <- cor(diabetes)
+
+# Visualize correlation matrix
+corrplot(cor_matrix, method = "color", type = "upper",
+         tl.cex = 0.7, tl.col = "black",
+         title = "Correlation Matrix",
+         mar = c(0, 0, 2, 0))
+```
+
+```{r}
+# Correlations with target variable
+diabetes_cors <- cor_matrix[, "diabetes_binary"] %>%
+  sort(decreasing = TRUE)
+
+cat("Correlations with diabetes_binary:\n")
+print(round(diabetes_cors, 3))
+```
+
+## Key Relationships
+
+```{r}
+# BMI by diabetes status
+ggplot(diabetes, aes(x = factor(diabetes_binary), y = bmi, fill = factor(diabetes_binary))) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("0" = "steelblue", "1" = "coral"),
+                    labels = c("No Diabetes", "Diabetes")) +
+  labs(title = "BMI by Diabetes Status",
+       x = "Diabetes Status",
+       y = "BMI",
+       fill = "Status") +
+  scale_x_discrete(labels = c("No Diabetes", "Diabetes")) +
+  theme_minimal()
+```
+
+```{r}
+# Diabetes rate by age category
+diabetes %>%
+  group_by(age) %>%
+  summarise(diabetes_rate = mean(diabetes_binary) * 100) %>%
+  ggplot(aes(x = factor(age), y = diabetes_rate)) +
+  geom_bar(stat = "identity", fill = "coral") +
+  labs(title = "Diabetes Rate by Age Category",
+       x = "Age Category (1-13)",
+       y = "Diabetes Rate (%)") +
+  theme_minimal()
+```
+
+```{r}
+# Diabetes rate by general health
+diabetes %>%
+  group_by(gen_hlth) %>%
+  summarise(diabetes_rate = mean(diabetes_binary) * 100,
+            count = n()) %>%
+  ggplot(aes(x = factor(gen_hlth), y = diabetes_rate)) +
+  geom_bar(stat = "identity", fill = "coral") +
+  labs(title = "Diabetes Rate by General Health",
+       subtitle = "1 = Excellent, 5 = Poor",
+       x = "General Health Category",
+       y = "Diabetes Rate (%)") +
+  theme_minimal()
+```

@@ -1,0 +1,471 @@
+---
+title: "DSA 495 601 Project Milestone 4"
+author: "Your Name"
+output:
+  html_document:
+    toc: true
+    toc_depth: '1'
+    df_print: paged
+  html_notebook:
+    toc: true
+    toc_depth: 1
+    number_sections: false
+    code_folding: hide
+editor_options:
+  chunk_output_type: inline
+  markdown: 
+    wrap: 72
+params:
+  my_path: /share/dsa495601f25/keporte2/ # @TODO Select your personal folder
+---
+
+For Milestone 4, you will specify your learner configurations and
+prepare for model training. This R notebook provides guidance on
+specifying your prediction objective, predictor sets, modeling
+approaches, cross-validation parameters, and fairness assessment
+variables. Please read through the entire document closely.
+
+Your goals are to (1) clearly define your prediction objective, (2)
+specify one or more predictor sets to test, (3) select appropriate
+modeling approaches for each predictor set, (4) configure
+cross-validation parameters, and (5) identify variables for fairness
+assessment.
+
+To help you identify places where you need to edit the code to match
+your project, look for "@TODO" in comments. Please delete examples
+discussed in the text and add your own explanations for your dataset and
+project goals. Answer all questions indicated with "@TODO".
+
+After you have edited the code as needed for your project and run all
+code chunks successfully, knit your completed file to HTML. Download the
+HTML to your computer and then print or save it to a PDF file with the
+following naming convention:
+course_section_semester_assignment_unityID.pdf. For example,
+DSC495_601_FA25_Milestone4_keporte2.pdf.
+
+# Set-up
+
+#### Load the necessary packages
+
+No edits are needed in the following chunk. Just run it as is.
+
+```{r loadpackages}
+.libPaths(c("/share/dsa495601f25/installed_libraries", .libPaths()))
+library(dplyr)
+library(tidyr)
+library(recipes)
+
+# Set seed for reproducibility
+seed <- 2022
+
+# Source check files
+source(paste0(params$my_path,"R/","checks_01_03.R"))
+source(paste0(params$my_path,"R/","checks_helpers.R"))
+```
+
+#### Load your processed data files
+
+Load the training and testing data files you created and saved in
+Milestone 3.
+
+```{r loadFiles}
+# Load processed training and testing data from Milestone 3
+trainDat <- readRDS(paste0(params$my_path, "trainDat.rds")) # @TODO Verify filename matches what you saved in Milestone 3
+testDat  <- readRDS(paste0(params$my_path, "testDat.rds"))  # @TODO Verify filename matches what you saved in Milestone 3
+
+# Check that files loaded correctly
+dim(trainDat)
+dim(testDat)
+```
+
+# Step 1: Specify the prediction objective
+
+Provide clear, concise descriptions of your prediction objective. These
+descriptions will help document your project and ensure clarity about
+what you're predicting, when, and for whom.
+
+**Question 1: Describe your outcome, timepoint, and population in 1-2
+sentences each. This is a review of your scoping, or it may be an update
+of your scoping if I gave your feedback that suggested changes.**
+
+```{r predDescription}
+# Provide short text descriptions for outcome, timepoint, and population
+outcomeDescription    <- "DESCRIBE WHAT YOU ARE PREDICTING" # @TODO Edit to describe your outcome
+timepointDescription  <- "DESCRIBE WHEN PREDICTION IS MADE"  # @TODO Edit to describe prediction timepoint
+populationDescription <- "DESCRIBE WHO IS IN YOUR DATASET"   # @TODO Edit to describe your population
+```
+
+# Step 2: Specify outcome variable name
+
+Enter the name of the column in your training and testing datasets that
+contains your outcome variable.
+
+**Reminder:** Your outcome variable should be binary (taking values 0
+and 1) with no missing values, as created in Milestone 3.
+
+```{r outcomeColumn}
+# Specify the name of your outcome variable column
+outcomeName <- "outcome" # @TODO Edit to match your outcome variable name from Milestone 3
+```
+
+# Step 3: Specify predictor sets
+
+In this step, you will define one or more sets of predictor variables to
+test in your models. Each predictor set should be named using the
+convention `predSet_` followed by a short descriptive name.
+
+**Important notes:**
+
+-   Your predictor sets should only include the processed variables from
+    Milestone 3 (scaled versions, dummy coded variables, missing
+    indicators, etc.)
+-   Do NOT include the original unprocessed variables unless they did
+    not need processing (they are in the correct format and have no
+    missing values)
+-   For every predictor with a missing indicator variable created in
+    Milestone 3, include both the imputed variable AND the missing
+    indicator
+-   If you have multiple dummies for categorical variables, include all
+    EXCEPT ONE in your predictor set. This avoids perfect
+    multicollinearity - when all dummy variables are included, they sum
+    to 1, which means any one can be perfectly predicted from the
+    others. The excluded category becomes the "reference group" that
+    other categories are compared against.
+-   Start with a **benchmark** predictor set that includes only
+    essential baseline predictors
+
+**Question 2: Describe your benchmark predictor set. What variables did
+you include and why? What timepoint(s) are these variables available?**
+
+```{r specifyPredset_bm}
+# Specify your benchmark predictor set
+# Include processed variable names from Milestone 3
+predSet_bm <- c("var1_std",           # @TODO Edit to include your processed predictors
+                "var2_category_A",     # @TODO Remember to include dummy coded categories
+                "var2_category_B",     # @TODO as separate variables
+                "var3_imputed",        # @TODO Include imputed continuous variables
+                "var3_missing")        # @TODO And their corresponding missing indicators
+
+# Print to verify
+print(predSet_bm)
+```
+
+Next, specify at least 2-3 additional predictor sets. Your strategy is
+to incrementally add more features (variables) that may also be
+predictive. Your final predictor set may be a "kitchen sink" set, taking
+advantage of a large set of variables that may or may not be predictive
+(maybe everything availalbe but not necessarily).
+
+**Question 3: For additional predictor sets beyond the benchmark,
+describe each one. What makes it different from the benchmark set? What
+hypothesis are you testing with this predictor set?**
+
+```{r specifyPredset_others}
+# EXAMPLE 1: Building on the benchmark set
+# You can include all benchmark predictors plus additional ones
+predSet_extended <- unique(c(predSet_bm, 
+                              c("var4_std",      # @TODO Edit to add your additional predictors
+                                "var5_missing"))) # @TODO Remember missing indicators if applicable
+print(predSet_extended)
+
+# EXAMPLE 2: Including all more features
+# If you created many features in Milestone 3, you might want a set with all of them
+# predSet_expanded <- c(predSet_bm,  # Start with benchmark
+#                         "feature1",   # @TODO Add more features
+#                         "feature2",
+#                         "feature3")
+# print(predSet_expanded)
+```
+
+Now aggregate all your predictor sets into a single list:
+
+```{r allPredsets}
+# Create list of all predictor sets
+# Edit to include all predSets you specified above
+allPredsets <- list(
+  predSet_bm = predSet_bm,                    # @TODO Keep this
+  predSet_extended = predSet_extended       # @TODO Edit to match your predictor set names
+  # predSet_kitchensink = predSet_kitchensink # @TODO Edit to match your predictor set names
+)
+
+# Verify all predictor sets
+print(names(allPredsets))
+```
+
+# Step 4: Specify modeling approaches
+
+In this step, you will select which machine learning algorithms to use
+with each predictor set. Different algorithms make different assumptions
+and may perform better or worse depending on your data characteristics.
+
+**Available modeling approaches include:**
+
+-   **glm**: Logistic regression (good baseline, interpretable)
+-   **lasso**: Regularized regression with automatic feature selection
+-   **ridge**: Regularized regression that keeps all features
+-   **elastic_net**: Combines lasso and ridge approaches
+-   **svm_linear**: Support vector machine with linear kernel
+-   **svm_rbf**: Support vector machine with radial basis function
+    kernel
+-   **random_forest**: Ensemble of decision trees (handles non-linearity
+    well)
+-   **xgboost**: Gradient boosted trees (often high-performing)
+
+**Considerations for choosing models:**
+
+-   Start simple (e.g., glm) before trying complex models
+-   If you have many predictors, lasso can help with feature selection
+-   Tree-based methods (random_forest, xgboost) handle non-linear
+    relationships well
+-   Review your notes and our slide deck from Class 7!
+
+**Question 4: For each predictor set, which modeling approaches did you
+choose? Why did you select these particular algorithms? Consider your
+dataset size, number of predictors, and project goals.**
+
+```{r specifyModels}
+# Specify which modeling approaches to use with each predictor set
+specifiedLearners <- list(
+  predSet_bm = c("glm", "lasso"),                        # @TODO Edit model names for benchmark set
+  predSet_extended = c("glm", "random_forest", "xgboost") # @TODO Edit to match your predictor sets and desired models
+)
+
+# Verify specifications
+print(specifiedLearners)
+```
+
+# Step 5: Create recipes for tidymodels
+
+The tidymodels package requires "recipes" to prepare data for modeling.
+Since you already prepared your data extensively in Milestone 3, these
+recipes are minimal - they mainly ensure your outcome variable is
+formatted correctly.
+
+**Note:** You must create one recipe for each predictor set you
+specified above.
+
+```{r specifyRecipes}
+# Create formulas for each predictor set
+# Edit to have one formula for each predictor set
+predSet_bm_formula <- as.formula(
+  paste(outcomeName, "~", paste(predSet_bm, collapse = "+"))
+)
+predSet_extended_formula <- as.formula(
+  paste(outcomeName, "~", paste(predSet_extended, collapse = "+"))
+)
+# @TODO Add formulas for any additional predictor sets
+# predSet_minimal_formula <- as.formula(
+#   paste(outcomeName, "~", paste(predSet_minimal, collapse = "+"))
+# )
+
+# Create recipes for each predictor set
+# The step_bin2factor ensures outcome is a 2-level factor
+# recipe_bm <- recipe(predSet_bm_formula, data = trainDat) %>%
+#   step_bin2factor(all_of(outcomeName))
+# 
+# recipe_extended <- recipe(predSet_extended_formula, data = trainDat) %>%
+#   step_bin2factor(all_of(outcomeName))
+
+# @TODO Add recipes for any additional predictor sets
+# recipe_minimal <- recipe(predSet_minimal_formula, data = trainDat) %>%
+#   step_bin2factor(all_of(outcomeName))
+
+# Create main formula and recipe (uses all variables)
+# predSet_main_formula <- as.formula(
+#   paste(outcomeName, "~", paste(".", collapse = "+"))
+# )
+# recipe_main <- recipe(predSet_main_formula, data = trainDat)
+
+# Aggregate all recipes into a list
+# Edit to include all recipes you created
+# recipes <- list(
+#   predSet_bm = recipe_bm,                    # @TODO Keep this
+#   predSet_extended = recipe_extended         # @TODO Edit to match your recipe names
+#   # predSet_minimal = recipe_minimal         # @TODO Add if you created this
+# )
+# 
+# # Save recipes for use in model training
+# saveRDS(recipes, file = paste0(params$my_path, "recipes.rds"))
+# saveRDS(recipe_main, file = paste0(params$my_path, "recipe_main.rds"))
+```
+
+# Step 6: Specify cross-validation parameters
+
+Cross-validation helps ensure your models will generalize to new data.
+Here you will specify:
+
+1.  **Number of folds**: How many parts to split your training data into
+    (typically 5 or 10)
+2.  **Stratification variable**: Whether to ensure each fold has similar
+    outcome proportions
+3.  **Grid size**: How many hyperparameter combinations to test (larger
+    = slower but more thorough)
+4.  **Tuning metric**: Which metric to optimize (roc_auc for balanced
+    data, pr_auc for imbalanced)
+
+**Guidelines:**
+
+-   **Folds**: 5-10 folds is standard. More folds = longer computation
+    time
+-   **Stratification**: Use stratification if your outcome is imbalanced
+    (less than 30% or more than 70% in one category)
+-   **Grid size**: Start with 5, increase to 10-20 if you have time and
+    want better tuning
+-   **Metric**: Use roc_auc for balanced outcomes, pr_auc for imbalanced
+    outcomes
+
+**Question 5: What cross-validation parameters did you choose? Justify
+your choices based on your dataset characteristics (especially outcome
+balance) and computational resources.**
+
+```{r crossValidation}
+# Specify number of cross-validation folds
+# Can be a number (e.g., 5 or 10) or a variable name for leave-one-group-out CV
+cvFolds <- 5 # @TODO Edit if desired (typical values: 5 or 10)
+
+# Specify stratification variable if needed
+# Set to NULL for no stratification, or specify variable name in quotes
+# Example: stratVar <- "outcome" to stratify by outcome
+stratVar <- NULL # @TODO Edit to outcome name if your data is imbalanced
+
+# Specify grid size for hyperparameter tuning
+# Larger values test more combinations but take longer
+# Typical values: 5 (quick), 10 (moderate), 20+ (thorough)
+gridSize <- 5 # @TODO Edit based on time/resource constraints
+
+# Specify performance metric for tuning
+# Options: "roc_auc" (balanced data) or "pr_auc" (imbalanced data)
+tuneMetrics <- "roc_auc" # @TODO Edit to "pr_auc" if outcome is imbalanced
+```
+
+# Step 7: Specify variables for fairness assessment
+
+Algorithmic fairness is an important consideration in predictive
+modeling. Here you will identify variables that represent
+characteristics for which you want to assess whether your models perform
+equitably.
+
+**Important notes:**
+
+-   Variables must be categorical (factor or character)
+-   Common fairness variables include: gender, race/ethnicity,
+    socioeconomic status, disability status
+-   You can specify a multi-category variable (e.g., race with multiple
+    levels) or binary dummy variables (e.g., race_white, race_black)
+-   Start with multi-category variables; if fairness issues arise,
+    investigate with binary dummies
+
+**Question 6: Which variables did you select for fairness assessment?
+Why are these variables important in your context? Are there other
+fairness considerations you should keep in mind for your prediction
+problem?**
+
+```{r equityVariables}
+# Specify categorical variables for fairness assessment
+equityVars <- c("gender", "race") # @TODO Edit to match variable names in your data
+
+# Verify all specified variables are categorical
+# equityVarsCheck <- apply(trainDat[, equityVars], 2, 
+#                          function(x) { is.factor(x) || is.character(x) })
+# print(equityVarsCheck) # All should be TRUE
+```
+
+# Step 8: Review and verify specifications
+
+Before proceeding to model training, let's review all specifications to
+ensure everything is correctly configured.
+
+```{r reviewSpecifications}
+# Review prediction objective
+cat("Prediction Objective:\n")
+cat("  Outcome:", outcomeDescription, "\n")
+cat("  Timepoint:", timepointDescription, "\n")
+cat("  Population:", populationDescription, "\n\n")
+
+# Review predictor sets
+cat("Predictor Sets:\n")
+for (name in names(allPredsets)) {
+  cat("  ", name, ":", length(allPredsets[[name]]), "predictors\n")
+}
+cat("\n")
+
+# Review modeling approaches
+cat("Modeling Approaches by Predictor Set:\n")
+for (name in names(specifiedLearners)) {
+  cat("  ", name, ":", paste(specifiedLearners[[name]], collapse = ", "), "\n")
+}
+cat("\n")
+
+# Review cross-validation parameters
+cat("Cross-Validation Parameters:\n")
+cat("  Folds:", cvFolds, "\n")
+cat("  Stratification:", ifelse(is.null(stratVar), "None", stratVar), "\n")
+cat("  Grid size:", gridSize, "\n")
+cat("  Tuning metric:", tuneMetrics, "\n\n")
+
+# Review fairness variables
+cat("Fairness Assessment Variables:\n")
+cat("  ", paste(equityVars, collapse = ", "), "\n")
+```
+
+**Question 7: After reviewing all specifications above, do you feel
+confident your learner specifications are appropriate for your
+prediction problem? Are there any concerns or adjustments you might want
+to make before model training?**
+
+# Step 9: Aggregate and save all specifications
+
+Now all specifications will be aggregated into a single list object and
+saved for use in model training.
+
+**Note:** This saves only metadata and specifications - no actual data
+is included in this file.
+
+```{r learnerSpecSave}
+# Create cross-validation parameters list
+cvParams <- list(
+  cvFolds = cvFolds,
+  seed = seed,
+  gridSize = gridSize, 
+  tuneMetrics = tuneMetrics,
+  stratVar = stratVar
+)
+
+# Create learning objective labels data frame
+learningObjectiveLabels <- data.frame(
+  outcomeDescription = outcomeDescription,
+  timepointDescription = timepointDescription,
+  populationDescription = populationDescription
+)
+
+# Calculate positive outcome proportion from training data
+obsOutcome <- as.numeric(trainDat[[outcomeName]])
+positiveProportion <- sum(obsOutcome) / length(obsOutcome)
+
+cat("Positive outcome proportion in training data:", 
+    round(positiveProportion, 3), "\n")
+
+# Aggregate all specifications into learnerSpec list
+learnerSpec <- list(
+  my_path = params$my_path,
+  trainDataName = "trainDat.rds",  # @TODO Verify this matches your Milestone 3 filename
+  testDataName = "testDat.rds",    # @TODO Verify this matches your Milestone 3 filename
+  learningObjectiveLabels = learningObjectiveLabels,
+  outcomeName = outcomeName,
+  allPredsets = allPredsets,
+  specifiedLearners = specifiedLearners,
+  cvParams = cvParams,
+  equityVars = equityVars,
+  positiveProportion = positiveProportion
+)
+
+# Save learner specifications
+saveRDS(learnerSpec, file = paste0(params$my_path, "learnerSpec.rds"))
+
+cat("\nLearner specifications saved successfully to:", 
+    paste0(params$my_path, "learnerSpec.rds"), "\n")
+```
+
+**Congratulations!** You have completed Milestone 4. Your learner
+specifications are now saved and ready for model training in the next
+milestone.

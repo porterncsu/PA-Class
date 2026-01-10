@@ -1,0 +1,21 @@
+# R files
+.Rhistory
+.Ruserdata
+.Rproj.user/
+
+# Temporary files
+*~
+*.swp
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# R Markdown output (uncomment if you don't want to track rendered files)
+# *.html
+# *.pdf
+
+# Environment files
+.Renviron
+.env

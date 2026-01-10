@@ -1,0 +1,544 @@
+---
+title: "DSA 495 601 Project Milestone 6"
+author: "Your Name" # @TODO: Add your name
+output:
+  html_document:
+    toc: true
+    toc_depth: '2'
+    df_print: paged
+  html_notebook:
+    toc: true
+    toc_depth: 2
+    number_sections: false
+    code_folding: hide
+editor_options:
+  chunk_output_type: inline
+  markdown: 
+    wrap: 72
+params:
+  my_path: /share/dsa495601f25/[your folder name]/ # @TODO: Select your personal folder - and don't delete the final "/"
+---
+
+# Introduction
+
+For Milestone 6, you will test your selected learner from Milestone 5 on your held-out test set. This milestone represents the culmination of your predictive modeling project, where you evaluate how well your model generalizes to completely unseen data.
+
+**Your goals:**
+
+1. Apply your selected learner to the test set
+2. Compare test performance to validation performance
+3. Evaluate discrimination and calibration on test data
+4. Assess fairness metrics on the test population
+5. Provide final recommendations for model deployment
+
+**Important notes:**
+
+- The test set should only be used once - this is your final evaluation
+- All coding you will need to modify or expand are marked with @TODO
+- Answer all questions marked with @TODO
+
+After completing all sections, knit to HTML, then download and print/save as PDF using this naming convention: `DSC495_601_FA25_Milestone6_unityID.pdf`
+
+**Due date:** November 12 11:45 a.m. ET
+
+---
+
+# Setup
+
+This section loads all necessary files and configures your R environment for model testing.
+
+```{r Setup, warning=FALSE, message=FALSE}
+# Set random seed for reproducibility
+seed <- 2024
+
+# Configure notebook settings
+knitr::opts_chunk$set(
+  cache = FALSE,      # Don't cache results
+  warning = FALSE,    # Suppress warnings
+  message = FALSE,    # Suppress messages
+  fig.width = 8,
+  fig.height = 7
+)
+
+# Load helper scripts with custom functions
+# These must be in your R/ subdirectory
+source("/share/dsa495601f25/templates/R/packages.R")
+source("/share/dsa495601f25/templates/R/learner_training.R")
+source("/share/dsa495601f25/templates/R/learner_training_helpers.R")
+source("/share/dsa495601f25/templates/R/equity_metrics.R")
+source("/share/dsa495601f25/templates/R/performance_metrics.R")
+source("/share/dsa495601f25/templates/R/plots_updated.R")
+
+# Load your processed data from Milestone 3
+trainDat <- readRDS(paste0(params$my_path, "trainDat.rds")) 
+  # @TODO: Verify filename matches Milestone 3
+testDat  <- readRDS(paste0(params$my_path, "testDat.rds"))  
+  # @TODO: Verify filename matches Milestone 3
+
+# Load learner specifications from Milestone 4
+learnerSpec <- readRDS(paste0(params$my_path, "learnerSpec.rds")) 
+  # @TODO: Verify filename matches Milestone 4
+
+# Load preprocessing recipes from Milestone 4
+recipes <- readRDS(paste0(params$my_path, "recipes.rds")) 
+  # @TODO: Verify filename matches Milestone 4
+mainRecipes <- readRDS(paste0(params$my_path, "recipe_main.rds")) 
+  # @TODO: Verify filename matches Milestone 4
+
+# Load validation results from Milestone 5
+trainResults <- readRDS(paste0(params$my_path, "validateLearnersResults.rds"))  
+  # @TODO: Verify filename matches Milestone 5
+
+# Extract key components
+trainMetrics <- trainResults$learnersMetrics  
+trainPredProbs <- trainResults$predProbs  
+
+
+# Verify everything loaded correctly
+cat("\nData verification:\n")
+cat("Training data:", nrow(trainDat), "rows,", ncol(trainDat), "columns\n")
+cat("Testing data:", nrow(testDat), "rows,", ncol(testDat), "columns\n")
+cat("Selected learner:", trainResults$modelResults$learnerName[[1]], "\n")
+cat("Selected threshold(s):", trainResults$selectedThreshold, "\n")
+cat("Outcome variable:", learnerSpec$outcomeName, "\n")
+```
+
+---
+
+# 1. Data consistency checks
+
+Before applying your model to the test set, we need to verify that the test data is compatible with your trained model.
+
+## 1.1 Feature availability check
+
+Verify that all predictors used in training are present in the test set.
+
+```{r predictorCheck, warning=FALSE, message=FALSE}
+# Extract predictors used in the selected model
+outcome <- learnerSpec$outcomeName
+learnerName <- trainResults$modelResults$learnerName[[1]]
+model_vars <- colnames(trainResults$modelFits[[learnerName]]$pre$mold$predictors)
+
+# Check for missing predictors in test set
+missing_in_test <- setdiff(model_vars, names(testDat))
+
+# Display results
+if (length(missing_in_test) == 0) {
+  cat("✓ All required predictors are present in the test dataset.\n")
+} else {
+  cat("⚠ WARNING: The following predictors are missing from the test set:\n")
+  cat(paste("-", missing_in_test, collapse = "\n"), "\n")
+}
+
+cat("\nNumber of predictors in model:", length(model_vars), "\n")
+```
+
+
+## 1.2 Distribution comparison
+
+Compare the distributions of predictors between training and test sets.
+
+```{r distributionCheck, warning=FALSE, message=FALSE}
+# @TODO: Select 3-5 important predictors from your model to examine
+key_predictors <- model_vars  # You can keep this as model_vars if you don't have a large set of predictor
+                              # Otherwise change model_vars to something like c("age_std","prev_success","balance_std") - the most important features
+
+# Filter to only predictors that exist in both datasets
+key_predictors <- intersect(key_predictors, model_vars)
+
+if (length(key_predictors) > 0) {
+  # Create comparison summaries
+  cat("=== Distribution Comparison for Key Predictors ===\n\n")
+  
+  for (pred in key_predictors) {
+    cat("Variable:", pred, "\n")
+    
+    if (is.numeric(trainDat[[pred]])) {
+      # Numeric variable comparison
+      print(summary(trainDat[[pred]]))
+      print(summary(testDat[[pred]]))
+      
+    } else {
+      # Categorical variable comparison
+      train_table <- table(trainDat[[pred]]) / nrow(trainDat)
+      test_table <- table(testDat[[pred]]) / nrow(testDat)
+      
+      cat("  Training proportions:\n")
+      print(round(train_table, 3))
+      cat("  Test proportions:\n")
+      print(round(test_table, 3))
+    }
+    cat("\n")
+  }
+} else {
+  cat("No key predictors found in model variables.\n")
+}
+```
+
+**Question 1:** Examine the comparisons above. Do you observe any substantial differences between training and test sets? If distributions differ notably, what might this suggest about how your data was split or about temporal changes in your population? How might these differences impact your model's test performance?
+
+**@TODO: Write your response here (4-5 sentences)**
+
+---
+
+# 2. Apply model to test set
+
+Now we'll apply your selected learner to the test set and generate predictions.
+
+```{r testPredictions, warning=FALSE, message=FALSE}
+
+# Apply model to test set
+testResults <- test_learners(
+  trainResults = trainResults, 
+  learnerSpec = learnerSpec,
+  mainRecipes = mainRecipes,
+  trn_data = trainDat,
+  tst_data = testDat
+)
+
+# Extract results
+testMetrics <- testResults$testMetrics
+testPredProbs <- testResults$testPredProbs
+testRocResults <- testResults$testRocResults
+testPrResults <- testResults$testPrResults
+testFits <- testResults$testFits
+
+# Combine predictions for comparison
+testPredProbs$set <- "Test"
+trainPredProbs$set <- "Validation"
+trainPredProbs[[learnerSpec$outcomeName]] <- as.factor(trainPredProbs[[learnerSpec$outcomeName]])
+testPredProbs[[learnerSpec$outcomeName]] <- as.factor(testPredProbs[[learnerSpec$outcomeName]])
+allPredProbs <- bind_rows(trainPredProbs, testPredProbs)
+
+cat("\n=== Test Set Predictions Summary ===\n")
+cat("Number of test observations:", nrow(testPredProbs), "\n")
+cat("Predicted probability range:", 
+    round(min(testPredProbs$.pred_yes), 3), "to", 
+    round(max(testPredProbs$.pred_yes), 3), "\n")
+```
+
+---
+
+# 3. Compare predicted probability distributions
+
+Understanding how predicted probabilities differ between validation and test sets helps identify potential overfitting or data drift.
+
+## 3.1 Overall distribution comparison
+
+This plot compares the distribution of predicted probabilities between your validation set (from cross-validation) and the test set.
+
+**What to look for:**
+- Similar distributions suggest good generalization
+- Shifted distributions may indicate overfitting or population differences
+- Narrower test distribution might suggest the model is less confident on new data
+
+```{r compareProbDistributions, warning=FALSE, message=FALSE, fig.height=6}
+# Plot comparison of predicted probability distributions
+plot_predicted_probabilities_bySet(allPredProbs)
+```
+
+**Question 2:** Compare the validation and test distributions. Are they similar in shape and range? If the test distribution is shifted (e.g., toward lower or higher probabilities), what might this indicate about your model's generalization to the test data? 
+
+**@TODO: Write your response here (4-5 sentences)**
+
+## 3.2 Distribution by true outcome
+
+Examine how well the model separates positive and negative cases in the test set.
+
+```{r testProbsByOutcome, warning=FALSE, message=FALSE, fig.height=6}
+# Plot test set predictions split by actual outcome
+testPredProbs[[learnerSpec$outcomeName]] <- ifelse(testPredProbs[[learnerSpec$outcomeName]]==1,"yes","no")
+plot_predicted_probabilities_split(testPredProbs, learnerSpec$outcomeName)
+
+```
+
+**Question 3:** In the test set, how well does your model separate the predicted probabilities for true positives (outcome=1) versus true negatives (outcome=0)? Is the separation comparable to what you observed in validation (Milestone 5)? If separation is worse in the test set, what might explain this degradation?
+
+**@TODO: Write your response here (3-4 sentences)**
+
+---
+
+# 4. Discrimination performance
+
+Evaluate how well your model distinguishes between classes in the test set.
+
+## 4.1 ROC curve comparison
+
+```{r testROC, warning=FALSE, message=FALSE, fig.height=6}
+# Plot ROC curve for test set
+plot_roc_curve_with_reference(
+  testRocResults, 
+  referencePredSet = unique(testRocResults$predSet),
+  title = "Test Set ROC Curve"
+)
+
+# Display ROC-AUC comparison
+cat("\n=== ROC-AUC Comparison ===\n")
+cat("Validation ROC-AUC:",
+    round(trainResults$modelResults %>%
+          filter(.metric == "roc_auc") %>%
+          pull(mean), 3), "\n")
+cat("Test ROC-AUC:",
+    round(testMetrics$roc_auc, 3), "\n")
+```
+
+## 4.2 Precision-Recall curve comparison
+
+For imbalanced outcomes, PR curves provide more informative performance assessment.
+
+```{r testPR, warning=FALSE, message=FALSE, fig.height=6}
+# Plot PR curve for test set
+plot_pr_curve_with_reference(
+  testPrResults, 
+  referencePredSet = unique(testPrResults$predSet),
+  title = "Test Set Precision-Recall Curve"
+)
+
+# Display PR-AUC comparison
+cat("\n=== PR-AUC Comparison ===\n")
+cat("Validation PR-AUC:", 
+    round(trainResults$modelResults %>% 
+          filter(.metric == "pr_auc") %>% 
+          pull(mean), 3), "\n")
+cat("Test PR-AUC:", 
+    round(testMetrics$pr_auc, 3), "\n")
+```
+
+**Question 4:** Compare the discrimination metrics (ROC-AUC and PR-AUC) between validation and test sets. Is the performance drop within acceptable ranges (typically <5-10% for well-generalizing models)? Given your outcome prevalence, which metric (ROC-AUC or PR-AUC) provides a more reliable assessment of performance degradation? If you observe a large drop, what might be the causes?
+
+**@TODO: Write your response here (5-6 sentences)**
+
+---
+
+# 5. Classification performance at selected thresholds
+
+Evaluate classification metrics using the threshold(s) you selected in Milestone 5. I suggest you simplify to just one threshold (as indicated in the code), but you may repeat the code below if you want to try more than one. 
+
+```{r testClassification, warning=FALSE, message=FALSE}
+
+# Define metric groups
+rateMetrics <- c("tpr", "fpr", "tnr", "fnr") 
+countMetrics <- c("tpc", "fpc", "tnc", "fnc")
+otherMetrics <- c("ppv", "f1", "acc")
+allMetrics <- c(rateMetrics, countMetrics, otherMetrics)
+
+# # To simplify, let's pick just one threshold and specify here
+selectedThreshold <- 0.2 # @TODO edit this to match your selection (see above for what you had narrowed it to and pick one)
+
+# Calculate test set metrics at selected thresholds
+testMetricsThres <- conf_metrics_thres_learner(
+  predProbs = testPredProbs,
+  outcomeName = learnerSpec$outcomeName,
+  thresSeq = selectedThreshold
+)
+
+# Display test metrics
+cat("=== Test Set Classification Metrics ===\n\n")
+testMetricsThres %>%
+  select(threshold, all_of(c("tpr", "fpr", "ppv", "f1", "acc"))) %>%
+  mutate(across(where(is.numeric), ~round(., 3))) %>%
+  print()
+
+# Compare with validation metrics
+  cat("\n=== Validation vs Test Comparison ===\n")
+  
+  # Get validation metrics at same threshold
+  validationMetricsThres <- conf_metrics_thres_learner(
+    predProbs = trainPredProbs,
+    outcomeName = outcome,
+    thresSeq = selectedThreshold
+  )
+  
+  comparison <- data.frame(
+    Metric = c("TPR", "FPR", "Precision", "F1"),
+    Validation = c(
+      validationMetricsThres$tpr[1],
+      validationMetricsThres$fpr[1],
+      validationMetricsThres$ppv[1],
+      validationMetricsThres$f1[1]
+    ),
+    Test = c(
+      testMetricsThres$tpr[1],
+      testMetricsThres$fpr[1],
+      testMetricsThres$ppv[1],
+      testMetricsThres$f1[1]
+    )
+  )
+  comparison$Difference <- comparison$Test - comparison$Validation
+  print(comparison)
+```
+
+## 5.1 Visualize classification performance
+
+```{r testConfusionMatrix, fig.height=8, fig.width=12, message=FALSE, warning=FALSE}
+# Filter and reshape data for plotting
+plotData <- testMetricsThres %>%
+  filter(threshold %in% selectedThreshold) %>%
+  pivot_longer(
+    cols = all_of(allMetrics),
+    names_to = "metricType",
+    values_to = "value"
+  )
+
+# Create bar plot for test set performance
+conf_mat_bar_plot(
+  plotData = plotData %>% filter(metricType %in% rateMetrics),
+  metricType = "rate",
+  outcomeDescription = c("Negative", "Positive"),  # @TODO: Update with your outcome labels
+  graphTitle = "Test Set Classification Performance"
+)
+```
+
+**Question 5:** Review the classification metrics at your selected threshold(s). How do key metrics compare between validation and test sets? Are the differences uniform across metrics, or do some degrade more than others? Based on these test results, would you recommend adjusting the threshold for deployment? Why or why not?
+
+**@TODO: Write your response here (5-6 sentences)**
+
+---
+
+# 6. Fairness assessment on test set
+
+Evaluate whether fairness issues observed in validation persist or change in the test set.
+
+## 6.1 Distribution by demographic groups
+
+```{r testFairnessDistribution, warning=FALSE, message=FALSE, fig.height=6}
+# @TODO: Specify your equity variable (should match Milestone 5)
+equityVar <- learnerSpec$equityVars[1]  # Use first equity variable
+
+# Check if equity variable exists in test set
+if (equityVar %in% names(testDat)) {
+  # Add equity variable to predictions if not already present
+  if (!(equityVar %in% names(testPredProbs))) {
+    testPredProbs <- testPredProbs %>%
+      bind_cols(testDat %>% select(all_of(equityVar)))
+  }
+  
+  cat("Assessing fairness for equity variable:", equityVar, "\n\n")
+  
+  # Plot distribution by group
+  plot_pred_probs(
+    testPredProbs, 
+    learner = unique(testPredProbs$learnerName),
+    group_var = equityVar
+  )
+} else {
+  cat("⚠ Equity variable", equityVar, "not found in test set.\n")
+}
+```
+
+**Question 6:** Compare the distribution of predicted probabilities across demographic groups in the test set. Are the patterns similar to what you observed in validation? Have disparities increased, decreased, or remained stable? What does this plot tell you? What does it indicate about fairness? 
+
+**@TODO: Write your response here (4-5 sentences)**
+
+## 6.2 Classification metrics by group
+
+```{r testFairnessMetrics, warning=FALSE, message=FALSE}
+if (equityVar %in% names(testPredProbs)) {
+  # Calculate equity metrics
+  equityResults <- calc_equity_metrics_all(
+    predProbs = testPredProbs,
+    learnerNames = unique(testPredProbs$learnerName),
+    thresholdsSelect = selectedThreshold,  # Use primary threshold
+    equityVars = equityVar,
+    outcomeName = outcome
+  )
+  
+  # Display results
+  cat("=== Test Set Fairness Metrics ===\n")
+  cat("Threshold:", selectedThreshold, "\n\n")
+  
+  equityResults %>%
+    select(category, tpr, fpr, ppv, fnr) %>%
+    mutate(across(where(is.numeric), ~round(., 3))) %>%
+    print()
+  
+  # Statistical tests for disparities
+  cat("\n=== Statistical Tests for Disparities ===\n")
+  
+  equityTests <- calc_equity_tests_all(
+    equityResults,
+    unique(testPredProbs$learnerName),
+    equityVar,
+    selectedThreshold
+  )
+  
+  equityTests %>%
+    select(-learnerName, -threshold) %>%
+    mutate(across(where(is.numeric), ~round(., 3))) %>%
+    print()
+  
+  cat("\nNote: p-values < 0.05 indicate statistically significant differences between groups\n")
+}
+```
+
+**Question 7:** Examine the fairness metrics and statistical tests. Which metrics show statistically significant disparities between groups? Are these disparities consistent with what you found in validation, or have they changed? What do you conclude about the extent of bias in your selected model? 
+
+**@TODO: Write your response here (6-8 sentences)**
+
+---
+
+# 7. Final recommendations
+
+Based on your complete analysis across training, validation, and testing, provide your final recommendations.
+
+**Question 8:** **Overall Performance Assessment**: Based on the test set results, does your model perform well enough for deployment in your intended use case? Consider the absolute performance metrics (not just relative to validation), the costs of different types of errors in your context, and whether the model meets minimum performance requirements you would set.
+
+**@TODO: Write your response here (10-12 sentences)**
+
+
+**Question 9:** **Fairness and Ethical Considerations**: Based on the fairness assessment in both validation and test sets, are there ethical concerns about deploying this model? Which groups might be advantaged or disadvantaged? What specific fairness interventions or monitoring would you recommend if this model were to be deployed? Consider both statistical fairness and practical impacts on affected populations.
+
+**@TODO: Write your response here (4-5 sentences)**
+
+**Question 10:** If recommending deployment, what conditions, monitoring, or constraints would you recommend? If not recommending deployment, what additional analyses, data collection, or model improvements would you recommend? 
+
+**@TODO: Write your response here (4-5 sentences)**
+
+**Question 11:** Is your R notebook knit by following all directions clearly? Are questions answered in markdown rather than in code chunks? If formatting neat? 
+
+**@TODO: No need to answer but doublecheck!**
+
+---
+
+# 8. Save final results
+
+Save your test results for potential future analysis or reporting.
+
+```{r saveFinalResults, warning=FALSE, message=FALSE}
+# Create final results object
+finalResults <- list(
+  testMetrics = testMetrics,
+  testPredProbs = testPredProbs,
+  testMetricsThres = testMetricsThres,
+  selectedLearner = learnerName,
+  selectedThreshold = selectedThreshold,
+  testROC_AUC = testMetrics$roc_auc,
+  testPR_AUC = testMetrics$pr_auc
+)
+
+# Add fairness results if calculated
+if (exists("equityResults")) {
+  finalResults$equityResults <- equityResults
+  finalResults$equityTests <- equityTests
+}
+
+# Save final results
+saveRDS(
+  finalResults,
+  file = paste0(params$my_path, "finalTestResults.rds")
+)
+
+cat("Final results saved successfully!\n")
+cat("File:", paste0(params$my_path, "finalTestResults.rds"), "\n")
+```
+
+**Congratulations!** You have completed Milestone 6 - the final testing phase of your predictive modeling project. Make sure you have:
+
+- [ ] Answered all questions marked with @TODO
+- [ ] Reviewed test performance against validation baselines
+- [ ] Assessed fairness and potential biases
+- [ ] Provided clear deployment recommendations
+- [ ] Knitted to HTML successfully
+- [ ] Saved as PDF with correct naming convention: `DSC495_601_FA25_Milestone6_unityID.pdf`
+
+This completes your predictive modeling project pipeline from data processing through final model testing!

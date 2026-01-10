@@ -1,0 +1,768 @@
+---
+title: "DSA 495 601 Project Milestone 5"
+author: "Your Name" # @TODO: Add your name
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 2
+    number_sections: false
+    code_folding: hide
+  html_document:
+    toc: true
+    toc_depth: '2'
+    df_print: paged
+editor_options:
+  chunk_output_type: inline
+  markdown: 
+    wrap: 72
+params:
+  my_path: /share/dsa495601f25/[ENTER YOUR FOLDER NAME]/ # @TODO: Select your personal folder
+  load_run: FALSE # @TODO: If you have already done model training and validation and don't need to make changes, you can set this to TRUE, but be sure to set to FALSE if you have made any changes to your data or specifications so that your training and validation is rerun
+---
+
+# Introduction
+
+For Milestone 5, you will train your specified learners, evaluate their performance, and select your final model for testing. This milestone focuses on understanding model performance from multiple perspectives: discrimination, calibration, and fairness.
+
+**Your goals:**
+
+1. Train all learner configurations from Milestone 4
+2. Evaluate discrimination using ROC and PR curves
+3. Assess calibration of predicted probabilities
+4. Examine classification metrics at different thresholds
+5. Investigate fairness across demographic groups
+6. Select and justify your final learner
+
+**Important notes:**
+
+- Model training may take 15-60+ minutes depending on your specifications and data size
+- All coding you will need to modify or expand are marked with @TODO
+- Answer all questions marked with @TODO
+
+After completing all sections, knit to HTML, then download and print/save as PDF using this naming convention: `DSC495_601_FA25_Milestone5_unityID.pdf`
+
+**Due date:** November 6 11:45 a.m. ET
+
+---
+
+# Setup
+
+This section loads all necessary files and configures your R environment for model training.
+
+```{r Setup, warning=FALSE, message=FALSE}
+# Set random seed for reproducibility
+seed <- 2024
+
+# Configure notebook settings
+knitr::opts_chunk$set(
+  cache = FALSE,      # Don't cache results
+  warning = FALSE,    # Suppress warnings
+  message = FALSE,    # Suppress messages
+  fig.width = 8,
+  fig.height = 7
+)
+
+# Load helper scripts with custom functions
+# These must be in your R/ subdirectory
+source("/share/dsa495601f25/templates/R/packages.R")
+source("/share/dsa495601f25/templates/R/learner_training.R")
+source("/share/dsa495601f25/templates/R/learner_training_helpers.R")
+source("/share/dsa495601f25/templates/R/equity_metrics.R")
+source("/share/dsa495601f25/templates/R/performance_metrics.R")
+source("/share/dsa495601f25/templates/R/plots_updated.R")
+
+# Enable parallel processing for faster training
+library(doParallel)
+n_cores <- parallel::detectCores() - 1
+cl <- makePSOCKcluster(n_cores)
+registerDoParallel(cl)
+cat("Parallel processing enabled with", n_cores, "cores\n")
+
+# Load your processed data from Milestone 3
+trainDat <- readRDS(paste0(params$my_path, "TrainDat.rds")) 
+  # @TODO: Verify filename matches Milestone 3
+testDat  <- readRDS(paste0(params$my_path, "TestDat.rds"))  
+  # @TODO: Verify filename matches Milestone 3
+
+# Load learner specifications from Milestone 4
+learnerSpec <- readRDS(paste0(params$my_path, "learnerSpec.rds")) 
+  # @TODO: Verify filename matches Milestone 4
+
+# Load preprocessing recipes from Milestone 4
+recipes <- readRDS(paste0(params$my_path, "recipes.rds")) 
+  # @TODO: Verify filename matches Milestone 4
+mainRecipes <- readRDS(paste0(params$my_path, "recipe_main.rds")) 
+  # @TODO: Verify filename matches Milestone 4
+
+# Verify everything loaded correctly
+cat("\nData verification:\n")
+cat("Training data:", nrow(trainDat), "rows,", ncol(trainDat), "columns\n")
+cat("Testing data:", nrow(testDat), "rows,", ncol(testDat), "columns\n")
+cat("Predictor sets:", length(learnerSpec$allPredsets), "\n")
+cat("Outcome variable:", learnerSpec$outcomeName, "\n")
+cat("Positive class proportion:", round(learnerSpec$positiveProportion, 3), "\n")
+```
+
+---
+
+# 1. Train and validate learners
+
+In this section, you'll train all models specified in Milestone 4 using cross-validation. This is the most time-intensive step.
+
+**What happens during training:**
+
+- Each model trains on different subsets of your data (k-fold cross-validation)
+- Hyperparameters are automatically tuned to find optimal settings
+- Performance metrics are calculated for each model
+- Predicted probabilities are saved for every observation
+
+**Expected computation time:**
+
+- Simple models (glm, lasso): 2-5 minutes
+- Tree-based models (random_forest, xgboost): 15-60 minutes
+- Total time = number of predictor sets × algorithms × folds
+- For testing: You may want to try few models (temporarily edit Milestone 4 to include fewer ML algorithms)
+- For frustrating, long run times: You can reduce grid_size in Milestone 4 (e.g. from 5 to 2 or 3)
+
+**Recommendation:** Ensure you have at least 30-60 minutes available before running this code. Maximize the number of processors when you launch the HPC. 
+
+```{r trainLearners, cache=TRUE, warning=FALSE, message=FALSE}
+
+# Load results from previous run if desired
+if (params$load_run==TRUE) learnerResults <- readRDS(paste0(params$my_path, "learnerResults.rds"))  
+
+if (params$load_run==FALSE) {
+# Record start time
+start_time <- Sys.time()
+cat("Training started at:", format(start_time, "%H:%M:%S"), "\n\n")
+
+# Train all learners using cross-validation
+# This function handles all training, tuning, and validation
+learnersResults <- train_learners(
+  trainDat = trainDat,
+  learnerSpec = learnerSpec,
+  recipes = recipes,
+  mainRecipes = mainRecipes
+)
+
+# Record end time and display duration
+end_time <- Sys.time()
+duration <- round(difftime(end_time, start_time, units = "mins"), 1)
+cat("\nTraining completed at:", format(end_time, "%H:%M:%S"), "\n")
+cat("Total training time:", duration, "minutes\n")
+
+# Save training/validation results
+saveRDS(learnersResults, file = paste0(params$my_path, "learnerResults.rds"))
+}
+
+# Extract key results
+modelResults <- learnersResults$modelResults  # Cross-validated metrics
+predProbs <- learnersResults$predProbs        # Predicted probabilities
+
+# Display summary
+cat("\n=== Training Summary ===\n")
+cat("Number of learners trained:", length(table(predProbs$learnerName)), "\n")
+cat("Number of observations:", nrow(trainDat), "\n")
+
+```
+
+**Checkpoint:** Verify that training completed successfully. You should see:
+- Training time in minutes
+- Number of learners matching your Milestone 4 specifications
+- No error messages
+
+
+---
+
+# 2. Distribution of predicted probabilities
+
+These plots show how your models distribute predicted probabilities across observations. Well-performing models should show clear separation between positive and negative outcomes.
+
+## 2.1 Overall distribution by learner
+
+This plot shows the overall distribution of predicted probabilities for each model.
+
+**What to look for:**
+- Where do most predictions fall?
+- Do different models show different patterns?
+- Are predictions too clustered (limited range)?
+
+```{r plotPredProbs, warning=FALSE, message=FALSE, fig.height=6}
+# Plot predicted probability distributions for all learners
+# No edits needed
+plot_predicted_probabilities(predProbs)
+```
+
+**Question 1:** Examine the predicted probability distributions. Which learner(s) show the widest range of predicted probabilities? Which show the narrowest range? What does the range of predictions tell you about a model's ability to discriminate between positive and negative cases?
+
+**@TODO: Write your response here (3-4 sentences)**
+
+## 2.2 Distribution split by true outcome
+
+These plots show predicted probabilities separately for true positive (outcome=1) and true negative (outcome=0) cases.
+
+**What to look for:**
+- Good separation between the two distributions = better discrimination
+- Overlapping distributions = model struggles to distinguish classes
+- Compare patterns across different learners
+
+```{r plotPredProbsSplit, warning=FALSE, message=FALSE, fig.height=8}
+# Plot predicted probabilities split by actual outcome
+# No edits needed
+plot_predicted_probabilities_split(predProbs, learnerSpec$outcomeName)
+```
+
+**Question 2:** For each learner, compare the distributions for outcome=0 (negative) vs outcome=1 (positive). Which learner shows the best separation between the two distributions? Which shows the most overlap? When distributions overlap significantly, what does this tell you about the model's ability to distinguish between classes?
+
+**@TODO: Write your response here (4-5 sentences)**
+
+---
+
+# 3. Discrimination metrics
+
+Discrimination measures how well models distinguish between positive and negative cases. We evaluate this using ROC and PR curves.
+
+## 3.1 ROC curves
+
+ROC (Receiver Operating Characteristic) curves show the trade-off between sensitivity (catching true positives) and specificity (avoiding false positives).
+
+**How to read the plot:**
+- Curves closer to the top-left corner = better performance
+- Diagonal line = random guessing
+- The red line is your benchmark model for comparison
+
+**Important note for imbalanced outcomes:** ROC curves can be overly optimistic when outcomes are rare because they give equal weight to both classes. A model can achieve high specificity simply by predicting "negative" most of the time, making the ROC curve look good even if it rarely catches true positives. This is why PR curves (next section) are more informative for imbalanced data.
+
+
+```{r plotROC, warning=FALSE, message=FALSE, fig.height=6}
+# Plot ROC curves with benchmark reference
+# No edits needed
+plot_roc_curve_with_reference(
+  learnersResults$rocResults, 
+  referencePredSet = "predSet_bm"
+)
+```
+
+## 3.2 Precision-Recall curves
+
+PR curves are especially useful for imbalanced outcomes (like yours with 11.7% positive rate). They show the trade-off between precision (accuracy of positive predictions) and recall (catching all true positives).
+
+**How to read the plot:**
+- Curves closer to the top-right corner = better performance
+- PR-AUC is typically lower than ROC-AUC for imbalanced data
+- Focus on this metric more than ROC for rare outcomes
+
+```{r plotPR, warning=FALSE, message=FALSE, fig.height=6}
+# Plot Precision-Recall curves with benchmark reference
+# No edits needed
+plot_pr_curve_with_reference(
+  prResults = learnersResults$prResults,
+  referencePredSet = "predSet_bm",
+  referenceLearner = "glm"
+)
+```
+
+**Question 3:** Compare performance across both the ROC curves (above) and PR curves. Which learner(s) have curves closest to the ideal (top-left for ROC, top-right for PR)? Are the rankings of learners similar or different between the two types of curves? Given your outcome prevalence (shown in the Setup section), which type of curve (ROC or PR) should you focus on more for evaluating your models and why? Based on the curve type you've chosen to prioritize, do the more complex predictor sets show visually better performance than the benchmark, or do they appear quite similar?
+
+
+**@TODO: Write your response here (4-5 sentences)**
+
+## 3.3 Cross-validated performance summary
+
+This table shows the average discrimination performance across all cross-validation folds.
+
+```{r cvMetrics, warning=FALSE, message=FALSE}
+# Display cross-validated performance metrics
+cat("=== Cross-Validated Performance Metrics ===\n\n")
+
+modelResults %>%
+  select(learnerName, .metric, mean, std_err) %>%
+  pivot_wider(names_from = .metric, values_from = c(mean, std_err)) %>%
+  arrange(desc(mean_pr_auc)) %>%
+  mutate(across(where(is.numeric), ~round(., 3))) %>%
+  print()
+```
+
+
+**Question 4:** Review the mean PR-AUC and ROC-AUC values with their standard errors. First, identify the 2-3 models with the highest mean values on your prioritized metric. Now look at the standard errors (std_err) - these indicate the uncertainty in the estimates. A rough rule of thumb: if two models' means differ by less than 2 times their standard errors, the difference may not be meaningful. For example, if Model A has mean=0.75 (std_err=0.03) and Model B has mean=0.73 (std_err=0.03), the difference of 0.02 is less than 2×0.03=0.06, suggesting the models perform similarly. Are the differences between your top models meaningful by this criterion, or are they essentially tied? 
+
+
+**@TODO: Write your response here (4-5 sentences)**
+
+---
+
+# 4. Calibration
+
+Calibration measures whether predicted probabilities match reality. A well-calibrated model that predicts 20% probability should be correct about 20% of the time.
+
+**How to read the calibration plot:**
+- Diagonal line = perfect calibration
+- Points above the line = model under-predicts (too conservative)
+- Points below the line = model over-predicts (too confident)
+
+**Important interpretation guidance:** Where you should focus depends on your outcome prevalence (shown in Setup):
+- **If your positive rate is low (< 30%)**: Most predictions will fall in the lower probability range (roughly 0 to 2-3× your positive rate). Focus your interpretation there.
+- **If your positive rate is balanced (30-70%)**: Predictions will be more spread out across the probability range. Examine calibration across the full range.
+- **If your positive rate is high (> 70%)**: Most predictions will fall in the higher probability range. Focus your interpretation there.
+
+**General caution:** Bins with very few observations (typically n < 20) will show high variability due to small sample sizes and should be interpreted cautiously. These bins often appear at the extremes of the probability range.
+
+
+```{r plotCalibration, warning=FALSE, message=FALSE, fig.height=6}
+# Create calibration plot with 5 bins
+# Using fewer bins provides more stable estimates for imbalanced outcomes
+calibration_plot(
+  predProbs, 
+  ".pred_yes",
+  learnerSpec$outcomeName,
+  "learnerName",
+  n_bins = 5
+)
+```
+
+
+**Question 5:** Examine the calibration plot, focusing primarily on the probability range where most of your predictions fall (based on your outcome prevalence from Setup, this should be the lower range if you have a rare outcome, the full range if balanced, or the higher range if your outcome is common). Are your models reasonably well-calibrated in this relevant range (points close to the diagonal)? Which model appears best calibrated? Do any models show systematic over-prediction (points below diagonal) or under-prediction (points above diagonal)? Why should you be cautious about interpreting bins with very few observations, and where do these sparse bins typically appear in your plot?
+
+
+**@TODO: Write your response here (5-6 sentences)**
+
+---
+
+# 5. Classification performance at different thresholds
+
+So far, we've evaluated predicted probabilities. Now we'll convert probabilities to classifications (yes/no) using different thresholds and evaluate the results.
+
+**Understanding thresholds:**
+- Lower threshold (e.g., 0.1): Classify more as positive → catch more true positives but get more false positives
+- Higher threshold (e.g., 0.5): Be more conservative → fewer false positives but miss more true positives
+- Your choice depends on the relative costs of false positives vs false negatives in your context
+
+## 5.1 Select thresholds to test
+
+Choose 2-3 thresholds based on your prediction context and distributions of the predicted likelihoods you observed in the plots above. 
+
+```{r selectThresholds, warning=FALSE, message=FALSE}
+# @TODO: Choose 2-3 thresholds to test based on your prediction context
+# Consider: What matters more - catching all positives or avoiding false positives?
+fixedThresholds <- c(0.1, 0.25, 0.5)
+
+cat("Testing thresholds:", fixedThresholds, "\n")
+cat("\nGuidance for threshold selection:\n")
+cat("- Lower thresholds: More sensitive, catches more cases\n")
+cat("- Higher thresholds: More specific, reduces false alarms\n")
+cat("- Consider your outcome prevalence:", 
+    round(learnerSpec$positiveProportion, 3), "\n")
+```
+
+**Question 6:** Why did you choose these specific threshold values? Explain how each threshold aligns with different priorities (e.g., maximizing a particular metric, or matching resource constraints). Given your prediction context and outcome prevalence, which threshold range seems most appropriate and why?
+
+**@TODO: Write your response here (4-5 sentences)**
+
+## 5.2 Key classification metrics
+
+Understanding the metrics we'll calculate:
+
+**Rate metrics** (expressed as proportions):
+- **TPR (True Positive Rate / Sensitivity / Recall)**: % of actual positives correctly identified - *higher is better*
+- **TNR (True Negative Rate / Specificity)**: % of actual negatives correctly identified - *higher is better*
+- **FPR (False Positive Rate)**: % of actual negatives incorrectly classified as positive - *lower is better*
+- **FNR (False Negative Rate)**: % of actual positives missed - *lower is better*
+
+**Other metrics:**
+- **Precision (PPV)**: Of those predicted positive, what % are actually positive?
+- **F1 Score**: Harmonic mean of precision and recall (balances both)
+- **Accuracy**: Overall % of correct predictions (can be misleading with imbalanced data)
+
+```{r defineMetrics, warning=FALSE, message=FALSE}
+# Define metric groups for analysis
+rateMetrics <- c("tpr", "fpr", "tnr", "fnr") 
+countMetrics <- c("tpc", "fpc", "tnc", "fnc")
+otherMetrics <- c("ppv", "f1", "acc")
+allMetrics <- c(rateMetrics, countMetrics, otherMetrics)
+```
+
+## 5.3 Calculate metrics for all learners
+
+```{r computeMetrics, warning=FALSE, message=FALSE}
+# Compute classification metrics at your specified thresholds
+# This calculates all metrics for each learner at each threshold
+learnerMetricsThres <- conf_metrics_thres_learner(
+  predProbs = predProbs,
+  outcomeName = learnerSpec$outcomeName,
+  thresSeq = fixedThresholds
+)
+
+# Display metrics for easy comparison
+cat("=== Classification Metrics by Learner and Threshold ===\n\n")
+
+learnerMetricsThres %>%
+  select(learnerName, threshold, all_of(allMetrics)) %>%
+  arrange(learnerName, threshold) %>%
+  mutate(across(where(is.numeric), ~round(., 3))) %>%
+  print()  # Show all rows
+
+# @TODO: Edit the code above to filter and select results that help you make comparisons
+# For example:
+# - Filter to specific learners you want to compare
+# - Filter to specific thresholds
+# - Select only the metrics most relevant to your decision
+# - Arrange by a key metric to see rankings
+# - Try multiple options that allow you to understand your results
+
+# Example template (uncomment and modify):
+# learnerMetricsThres %>%
+#   filter(learnerName %in% c("learner1", "learner2"),
+#          threshold %in% c(0.25, 0.5)) %>%
+#   select(learnerName, threshold, tpr, fpr, ppv, f1) %>%
+#   arrange(desc(f1)) %>%
+#   mutate(across(where(is.numeric), ~round(., 3))) %>%
+#   print()
+```
+
+**Question 9:** After reviewing the full metrics table, create a custom filtered view (using the template above or your own code) that helps you compare the learners and thresholds you're most interested in. Focus on the metrics most relevant to your prediction context. Based on this filtered view, what patterns or insights emerge? Which learner-threshold combinations look most promising for the predictive analytics use case that you scoped?
+
+**@TODO: Write your response here (4-5 sentences). Be sure to refer to your project scoping in your discussion.**
+
+## 5.4 Visualize confusion matrix statistics
+
+Based on the results above, you may want to narrow down to the most promising learners and thresholds for closer examination. These bar plots provide a visual comparison of classification performance, making it easier to see patterns and trade-offs.
+
+**What the plots show:**
+- Each panel displays one of the four key rate metrics (TPR, FPR, TNR, FNR)
+- Or you can chose to display the count metrics (TPC, FPC, TNC, FNC)
+- Each bar represents one learner at one threshold
+- Bars are grouped by threshold to facilitate comparison
+
+**How to interpret:**
+- **TPR/TPC and TNR/TNC**: Higher is better (bars closer to 1.0 indicate better performance)
+- **FPR/FPC and FNR/FNC**: Lower is better (bars closer to 0.0 indicate fewer errors)
+- Compare bars within each panel to identify which learners perform best on that metric
+- Compare the same learner across thresholds to see how changing the threshold affects performance
+
+**Key insight:** There's always a trade-off between metrics. A learner with high TPR (catching most positive cases) will typically have higher FPR (more false alarms). Your goal is to find the best balance for your specific prediction context/scoping.
+
+```{r plotConfusionMatrix, fig.height=8, fig.width=12, message=FALSE, warning=FALSE}
+
+# @TODO: Select which learners and thresholds to visualize (2-3 should work)
+selectedLearners <- c("glm_predSet_bm", "lasso_predSet_extended")
+
+# @TODO: Select which threshold(s) to focus on for detailed comparison
+selectedThresholds <- c(0.25,0.5)
+
+# @TODO: Select whether to focus on rates or counts
+selectMetricsGroup <- rateMetrics # other option is countMetrics
+
+# Narrow results to selections
+# No more edits are needed from here
+# learnerMetricsThres %>%
+#   filter(threshold %in% selectedThresholds) %>%
+#   filter(learnerName %in% selectedLearners) %>% 
+#   select(learnerName, all_of(selectMetricsGroup))
+
+# Plot
+plotData <- learnerMetricsThres %>%
+  filter(learnerName %in% selectedLearners) %>%
+  filter(threshold %in% selectedThresholds) %>%
+  pivot_longer(
+    cols = all_of(allMetrics),  
+    names_to = "metricType",
+    values_to = "value"
+  )
+
+conf_mat_bar_plot(
+   plotData = plotData %>% filter(metricType %in% rateMetrics),
+   metricType = "rate",
+   outcomeDescription = c("Not Graduate", "Graduate"),
+   graphTitle = "Classification Performance Metrics"
+)
+```
+
+**Question 10:** Examine the bar plots carefully. Which learner-threshold combination achieves the best balance between TPR (catching true positives) and FPR (avoiding false positives) for your prediction context? Looking across thresholds, describe how increasing the threshold from your lowest to highest value affects all four rate metrics. Does the visualization reveal any patterns or insights that weren't immediately obvious from the tables alone?
+
+**@TODO: Write your response here (5-6 sentences)**
+
+---
+
+# 6. Fairness assessment
+
+Assess whether your model performs differently across groups. Fairness is crucial for ethical deployment of predictive models.
+
+**What we're checking:**
+- Do predicted probabilities differ across groups?
+- Does the model have similar performance across groups?
+- Are there biases that could lead to unfair outcomes if the model was deployed? 
+- Do different learners have different results related to bias? 
+
+## 6.1 Distribution of predictions by group
+
+The following code only allows you to look at one learner at time. At this point you may have narrowed your learners to one or two based on performance. You may want to examine bias for more than one learner. Therefore, you will need to copy and paste/edit the code below and repeat it for another learner to get plots for each. 
+
+```{r fairnessDistribution, warning=FALSE, message=FALSE, fig.height=6}
+# @TODO: Select one learner to examine for fairness
+fairnessLearner <- "glm_predSet_bm"
+#fairnessLearner2 <- "glm_predSet_extended" # optionally, add another learner here so that you can repeat plots for different learners
+
+# Get the equity variable from your Milestone 4 specifications
+equityVar <- learnerSpec$equityVars
+
+cat("Assessing fairness for:", fairnessLearner, "\n")
+cat("Equity variable:", equityVar, "\n\n")
+
+# Plot distribution of predicted probabilities by group
+plot_pred_probs(
+  predProbs, 
+  learner = fairnessLearner,
+  group_var = equityVar
+)
+```
+
+**Question 11:** Examine the distribution of predicted probabilities across groups. Do you observe differences in where the distributions are centered or in their spread? Which group(s) tend to receive higher predicted probabilities? What might explain these differences - could they reflect true differences in outcome rates between groups, differences in predictor availability/quality, or potential model bias? What else could they reflect? 
+
+**@TODO: Write your response here (5-6 sentences)**
+
+## 6.2 Calibration by group
+
+Check whether the model is equally well-calibrated across demographic groups. Again, you can copy and paste this code and change what you pass in for learnerName to examine calibration for another learner. 
+
+```{r fairnessCalibration, warning=FALSE, message=FALSE, fig.height=6}
+# Plot calibration separately for each demographic group
+calibration_plot_by_group(
+  predProbs,
+  ".pred_yes",
+  learnerSpec$outcomeName,
+  group_col = equityVar,
+  learner_col = "learnerName",
+  learnerName = fairnessLearner
+)
+```
+
+**Question 12:** Compare calibration across demographic groups. Is the model equally well-calibrated for all groups (points equally close to the diagonal line)? Are there groups for which the model systematically over-predicts (points below diagonal) or under-predicts (points above diagonal)? What are the practical implications if a model is poorly calibrated for certain groups?
+
+**@TODO: Write your response here (4-5 sentences)**
+
+## 6.3 Classification metrics by group
+
+Examine whether classification accuracy differs across groups at your chosen threshold.
+
+```{r fairnessMetrics, warning=FALSE, message=FALSE}
+# @TODO: Select threshold to use for fairness assessment
+fairnessThreshold <- 0.25 # @TODO, Optionally, you can edit this to turn it into a vector of more than one threshold
+
+cat("=== Fairness Assessment ===\n")
+cat("Learner:", fairnessLearner, "\n")
+cat("Threshold:", fairnessThreshold, "\n")
+cat("Equity variable:", equityVar, "\n\n")
+
+# Calculate metrics by group
+equityResults <- calc_equity_metrics_all(
+  predProbs = predProbs,
+  learnerNames = fairnessLearner, # @TODO Optionally, you can edit this to c(fairnessLearner,fairnessLearner2)
+  thresholdsSelect = fairnessThreshold,
+  equityVars = equityVar,
+  outcomeName = learnerSpec$outcomeName
+)
+
+# Display key metrics by group
+cat("Classification metrics by group:\n\n")
+equityResults %>%
+  select(category, threshold, tpr, fpr, ppv, fnr) %>%
+  mutate(across(where(is.numeric), ~round(., 3))) %>%
+  print()
+```
+
+**Question 13:** Examine the classification metrics across demographic groups carefully. Do you see meaningful differences in TPR (sensitivity) across groups? What about FPR (false positive rate)? Or other key metrics that you care about for your scope? Consider the context of your scope: if one group has a much higher FPR, what does this mean in practice for members of that group? If one group has a lower TPR, what opportunities might they be missing? Which disparities concern you most from an ethical standpoint and why? What factors might explain these differences (sample size, base rates, feature availability, or actual bias)?
+
+**@TODO: Write your response here (6-8 sentences)**
+
+---
+
+# 7. Results summary
+
+Before selecting your final model, review this comprehensive summary of all results.
+
+```{r resultsSummary, warning=FALSE, message=FALSE}
+cat("============================================\n")
+cat("         COMPLETE RESULTS SUMMARY\n")
+cat("============================================\n\n")
+
+# 1. Discrimination performance
+cat("1. DISCRIMINATION (Cross-Validated)\n")
+cat("   Sorted by PR-AUC (most important for imbalanced outcomes)\n\n")
+modelResults %>%
+  filter(.metric == "pr_auc") %>%
+  select(learnerName, mean, std_err) %>%
+  arrange(desc(mean)) %>%
+  mutate(across(where(is.numeric), ~round(., 3))) %>%
+  print()
+
+# 2. Classification metrics at focus threshold
+cat("\n2. CLASSIFICATION METRICS AT THRESHOLD", focusThreshold, "\n\n")
+learnerMetricsThres %>%
+  filter(threshold == focusThreshold) %>%
+  select(learnerName, tpr, fpr, ppv, f1) %>%
+  arrange(desc(f1)) %>%
+  mutate(across(where(is.numeric), ~round(., 3))) %>%
+  print()
+
+# 3. Fairness summary (if applicable)
+if (exists("equityResults")) {
+  cat("\n3. FAIRNESS SUMMARY\n")
+  cat("   TPR by group at threshold", fairnessThreshold, "\n\n")
+  equityResults %>%
+    select(category, tpr, fpr) %>%
+    mutate(across(where(is.numeric), ~round(., 3))) %>%
+    print()
+}
+
+cat("\n============================================\n")
+```
+
+---
+
+# 8. Final learner selection
+
+Now make your final decision using this structured framework.
+
+## Step 1: Narrow down candidates
+
+Based on your analysis, eliminate poor performers and identify top candidates.
+
+**Criteria to consider:**
+- Discrimination: PR-AUC and ROC-AUC
+- Calibration: Based on calibration plot
+- Classification: Confusion matrix metrics
+- Fairness: Differences in performanc across groups
+- Interpretability: Simpler models (glm, lasso) are easier to explain
+
+## Step 2: Consider simplicity and tranparency
+
+
+**Question 14:** How important is model interpretability in your prediction context? Would stakeholders (decision-makers, affected individuals, regulators) need to understand why specific predictions are made? If interpretability is important, how should this influence your choice between simpler models (like glm) versus more complex "black box" models (like random forest or xgboost)? What would you lose and gain by prioritizing interpretability?
+
+**@TODO: Write your response here (4-5 sentences)**
+
+## Step 3: Make your selection
+
+Select both a learner and the threshold you would recommend for turning predicted likelihoods into classifications for your scoped use-case.
+
+```{r finalSelection, warning=FALSE, message=FALSE}
+# @TODO: Specify your final learner
+finalLearner <- "glm_predSet_bm"
+
+# @TODO: Specify 1-2 thresholds you'll use with this learner
+finalThresholds <- c(0.25)
+
+cat("============================================\n")
+cat("         FINAL SELECTION\n")
+cat("============================================\n\n")
+cat("Selected learner:", finalLearner, "\n")
+cat("Selected threshold(s):", finalThresholds, "\n\n")
+
+# Display final learner's performance
+cat("Discrimination:\n")
+modelResults %>%
+  filter(learnerName == finalLearner) %>%
+  select(.metric, mean, std_err) %>%
+  mutate(across(where(is.numeric), ~round(., 3))) %>%
+  print()
+
+cat("\nClassification metrics at selected threshold(s):\n")
+learnerMetricsThres %>%
+  filter(learnerName == finalLearner, threshold %in% finalThresholds) %>%
+  select(threshold, all_of(allMetrics)) %>%
+  mutate(across(where(is.numeric), ~round(., 3))) %>%
+  print()
+
+cat("\n============================================\n")
+```
+
+## Step 4: Justify your choice
+
+**Question 15:** Provide a comprehensive justification for your final learner and threshold selection. Your response must address ALL of the following:
+
+1. **Performance justification**: Why this learner over others? Cite specific metrics (PR-AUC, calibration, TPR/FPR at your threshold) that support your choice.
+
+2. **Threshold justification**: Why this specific threshold? Explain how it balances the trade-offs between sensitivity and precision given the relative costs of errors in your context.
+
+3. **Context alignment**: How does this choice align with your prediction objective, population, and timepoint (your scope)? 
+
+4. **Fairness consideration**: How did fairness results influence your decision? If disparities exist, justify why you're comfortable proceeding or explain what mitigation steps you'd recommend.
+
+5. **Limitations and trade-offs**: What are you giving up with this choice? What are the key limitations or risks you need to be aware of when recommending this model moves forward for testing?
+
+
+**@TODO: Write your detailed justification here (8-10 sentences)**
+
+---
+
+# 9. Save results for testing
+
+Your selected learner will be tested on the held-out test set in the next milestone.
+
+```{r saveResults, warning=FALSE, message=FALSE}
+# Create object with selected learner results
+trainResultsValidate <- filter_results(learnersResults, finalLearner)
+
+# Add your selected thresholds
+trainResultsValidate$selectedThresholds <- finalThresholds
+
+# Save for next milestone
+saveRDS(
+  trainResultsValidate, 
+  file = paste0(params$my_path, "validateLearnersResults.rds")
+)
+  # @TODO: Verify this filename matches what you'll use in testing
+
+cat("Results saved successfully!\n")
+cat("File:", paste0(params$my_path, "validateLearnersResults.rds"), "\n")
+
+# Clean up parallel processing
+stopCluster(cl)
+registerDoSEQ()
+cat("\nParallel processing stopped.\n")
+```
+
+---
+
+# Appendix: Advanced threshold selection (Optional)
+
+If you want to explore more sophisticated threshold selection methods, use this section.
+
+## A. Distribution-based thresholds
+
+```{r advancedThresholds, warning=FALSE, message=FALSE, eval=FALSE}
+# Calculate median and proportional thresholds for each learner
+distributionThresholds <- predProbs %>%
+  group_by(learnerName) %>%
+  summarise(
+    median_threshold = median(.pred_yes),
+    proportional_threshold = quantile(.pred_yes, 
+                                     probs = learnerSpec$positiveProportion)
+  )
+
+print(distributionThresholds)
+```
+
+## B. Criteria-based thresholds
+
+```{r criteriaThresholds, warning=FALSE, message=FALSE, eval=FALSE}
+# Find threshold that achieves target TPR
+criteriaThreshold <- find_threshold(
+  predProbs,
+  predicted_probs_col = ".pred_yes",
+  ground_truths_col = learnerSpec$outcomeName,
+  learner_col = "learnerName",
+  metric = "tpr",
+  target_proportion = 0.8  # Target 80% sensitivity
+)
+
+print(criteriaThreshold)
+```
+
+---
+
+**Congratulations!** You have completed Milestone 5. Make sure you have:
+- [ ] Answered all questions marked with @TODO
+- [ ] Provided justification for your final learner selection
+- [ ] Knitted to HTML successfully
+- [ ] Saved as PDF with correct naming convention

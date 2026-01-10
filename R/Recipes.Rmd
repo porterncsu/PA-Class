@@ -1,0 +1,221 @@
+
+---
+title: "Recipes"
+output: html_notebook
+---
+
+This text and code was lifted (and removed from 01_03_Learner_Specification.Rmd). Current thinking is that this belongs earlier in phasing of work. That is, all data preparation should happen prior to specifying predictor sets and so on. But code may be valuable, so extracting for now. 
+
+# Step 9: Preprocessing
+
+We create "recipes" that specify what steps to take when preprocessing data.
+Some steps that are almost always recommended such as creating dummy variables for factor variables, 
+and centering and scaling numeric variables.
+We create one recipe for each predictor set.
+We also need to create a **main** recipe that includes all the unique predictor sets + the equity
+variables for fairness evaluation later on.
+
+The preprocessing steps from the recipe are trained on the training data.
+None of the validation or test data is used to derive parameters to be applied to future incoming data.
+
+For more conceptual background on data preparation, we refer to Chapter 2 in our companion Predictive Modeling Guide.
+
+Before we dive into recipes, we first have to check if our training and testing data have missing values.
+If so, we will impute them using mean for numeric predictors and mode or median (if you are running
+models that require all predictors to be of numeric type and do not accept factor, you will
+unfortunately be unable to convert your data to factors) for categorical predictors.
+We will also be creating binary indicator variables where we will code as **1** for instances where there is
+missingness for each of the variables.
+The indicator variables hope to capture a potential relationship between unobserved characteristics that cause
+the missingness and the outcome of interest.
+Missingness check and the data imputation will be carried out separately for the training and testing data to
+prevent data preprocessing leakage.
+
+These will all be taken care of by our recipes and workflow() set up of the background tidymodels.
+
+For more information on how tidymodel works, please refer to the overall resource here:
+https://www.tidymodels.org/start/
+
+
+```{r}
+# fill in the name of the training, testing 
+# or validation data set to check the percentage of missingness
+#-------------------------#
+print(naniar::pct_miss_case(trainDat))
+#-------------------------#
+```
+
+```{r}
+# fill in the name of the training, testing
+# or validation data set to check the percentage of missing values across all variables
+#-------------------------#
+missTrainDatViz <- 
+  naniar::vis_miss(trainDat) + 
+    ggplot2::theme(axis.text.x = element_text(angle = 90))
+print(missTrainDatViz)
+#-------------------------#
+```
+
+```{r}
+head(trainDat)
+```
+
+```{r setRecipes}
+#-------------------------#
+# benchmark recipe
+predSet_bm_formula <- as.formula(
+  paste(outcomeName, "~", paste(predSet_bm, collapse = "+"))
+)
+recipe_bm <-
+  recipe(predSet_bm_formula, data = trainDat) %>%
+  # create indicator for missing values
+  step_mutate(
+    miss_gender_SS = dplyr::if_else(is.na(gender_SS), 1, 0),
+    miss_prev_GPA_SS = dplyr::if_else(is.na(prev_GPA_SS), 1, 0),
+    miss_num_classes_SS = dplyr::if_else(is.na(num_classes_SS), 1, 0),
+    miss_fam_income_SS = dplyr::if_else(is.na(fam_income_SS), 1, 0)
+  ) %>%
+  # impute mean to the original missing continuous variables
+  step_impute_mean(
+    prev_GPA_SS,
+    fam_income_SS
+  ) %>%
+  # impute median to the original number of classes variables since there
+  # are so many levels to factor
+  step_impute_median(
+    num_classes_SS,
+    gender_SS
+  ) %>%
+  step_bin2factor({{outcomeName}}) %>% # create outcome binary
+  # center
+  step_center(all_numeric()) %>%
+  # scale
+  step_scale(all_numeric())
+  # ensure outcome is a factor
+
+# mid-semester recipe
+predSet_ms_formula <- as.formula(
+  paste(outcomeName, "~", paste(predSet_ms, collapse = "+"))
+)
+recipe_ms <-
+  recipe(predSet_ms_formula, data = trainDat) %>%
+  # create indicator for missing values
+  step_mutate(
+    miss_gender_SS = dplyr::if_else(is.na(gender_SS), 1, 0),
+    miss_prev_GPA_SS = dplyr::if_else(is.na(prev_GPA_SS), 1, 0),
+    miss_num_classes_SS = dplyr::if_else(is.na(num_classes_SS), 1, 0),
+    miss_fam_income_SS = dplyr::if_else(is.na(fam_income_SS), 1, 0),
+    miss_cur_GPA_MS = dplyr::if_else(is.na(cur_GPA_MS), 1,0)
+  ) %>%
+  # impute mean to the original missing continuous variables
+  step_impute_mean(
+    prev_GPA_SS,
+    fam_income_SS,
+    cur_GPA_MS
+  ) %>%
+  # impute median to the number of classes since there are so many levels to factor
+  step_impute_median(
+    num_classes_SS,
+    gender_SS
+  ) %>%
+  step_bin2factor({{outcomeName}}) %>% # create outcome binary
+  # center numeric predictors
+  step_center(all_numeric()) %>%
+  # scale
+  step_scale(all_numeric())
+  # ensure outcome is a factor
+
+# recipe for all predictors - even if you have not specified all predictor sets
+
+recipes <- list(
+  predSet_bm = recipe_bm,
+  predSet_ms = recipe_ms
+)
+
+# main recipe
+predSet_main_formula <- as.formula(
+  paste(outcomeName, "~", paste(".", collapse = "+"))
+)
+
+# You do not need to center or scale the main recipe as
+# we are not supplying it to a model
+recipe_main <-
+  recipe(predSet_main_formula, data = trainDat) %>%
+  # remove the id variable
+  step_rm(student_id) %>%
+  # create indicator for missing values
+  step_mutate(
+    miss_gender_SS = dplyr::if_else(is.na(gender_SS), 1, 0),
+    miss_race_SS = dplyr::if_else(is.na(race_SS), 1, 0),
+    miss_prev_GPA_SS = dplyr::if_else(is.na(prev_GPA_SS), 1, 0),
+    miss_num_classes_SS = dplyr::if_else(is.na(num_classes_SS), 1, 0),
+    miss_fam_income_SS = dplyr::if_else(is.na(fam_income_SS), 1, 0),
+    miss_athlete_SS = dplyr::if_else(is.na(athlete_SS), 1, 0),
+    miss_advanced_classes_SS = dplyr::if_else(is.na(advanced_classes_SS), 1, 0),
+    miss_absences_MS = dplyr::if_else(is.na(absences_MS), 1,0),
+    miss_cur_GPA_MS = dplyr::if_else(is.na(cur_GPA_MS), 1,0)
+  ) %>%
+  # impute mean to the original missing continuous variables
+  step_impute_mean(
+    prev_GPA_SS,
+    fam_income_SS,
+    cur_GPA_MS
+  ) %>%
+  # impute median to the number of classes since there are so many levels to factor
+  step_impute_median(
+    gender_SS,
+    race_SS,
+    num_classes_SS,
+    athlete_SS,
+    advanced_classes_SS,
+    absences_MS
+  ) %>%
+  step_bin2factor({{outcomeName}}) 
+
+#-------------------------#
+saveRDS(recipes, file = here::here(dataOutputPath, "recipes.rds"))
+saveRDS(recipe_main, file = here::here(dataOutputPath, "recipe_main.rds"))
+```
+
+If we wanted to include interaction terms, an example is below in comments.
+
+```{r setInteractions}
+# # mid-semester recipe with interactions
+# recipe_bm <-
+#   recipe(predSet_bmFormula, data = trainDat) %>%
+#   # dummy vars
+#   step_dummy(all_nominal_predictors()) %>%
+#   # center numeric predictors
+#   step_center(all_predictors()) %>%
+#   # scale
+#   step_scale(all_predictors()) %>%
+#   # interactions
+#   step_interact(terms = ~ athlete_SS:advanced_SS)
+```
+
+Other possible recipes include:
+
+- impute missingness
+- taking a transformation, such as a log transformation
+- discretization
+- forming dummy variables (especially helpful if train/test have different categories for some variables)
+- create interactions
+- normalization
+- multivariate transformations like PCA
+- removing highly correlated or zero variance columns
+
+For example application of recipe within a predictive modeling project, please read the guide below.
+(https://www.tidymodels.org/start/recipes/)[https://www.tidymodels.org/start/recipes/]
+
+For an introduction on what are recipes and how to use recipes, below is an introductory video from the creator:
+(https://www.youtube.com/watch?v=GdR_S8bYaag)[https://www.youtube.com/watch?v=GdR_S8bYaag]
+
+For searching for sample recipe steps, check here:
+(https://www.tidymodels.org/find/recipes/)[https://www.tidymodels.org/find/recipes/]
+
+For more conceptual background, see the list of articles here:
+(https://recipes.tidymodels.org/articles/index.html)[https://recipes.tidymodels.org/articles/index.html]
+
+For a full list of available functions, see the recipes package:
+(https://recipes.tidymodels.org/reference/index.html)[https://recipes.tidymodels.org/reference/index.html]
+

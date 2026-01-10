@@ -1,0 +1,635 @@
+---
+title: "DSA 495 601 Project Milestone 3"
+author: "Your Name"
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 1
+    number_sections: false
+    code_folding: hide
+  html_document:
+    toc: true
+    toc_depth: '1'
+    df_print: paged
+editor_options:
+  chunk_output_type: inline
+  markdown: 
+    wrap: 72
+params:
+  data_path: /share/dsa495601f25/project_data_sets/FOLDER_FOR_YOUR_DATA/ # @TODO Select folder within project_data_sets
+  my_path: /share/dsa495601f25/YOUR_FOLDER/ # @TODO Select your personal folder
+---
+
+For Milestone 3, you will prepare your data for predictive analytics.
+This R notebook provides a review of the data preparation concepts we
+discuss in class and helps you implement them. Please read through the
+entire document closely. You may not need to carry out all steps (e.g.
+if you do not have missing values, skip over the step that addresses
+this issue), but you can still learn by reading the notes and reviewing
+the code.
+
+Your goals are (1) to create *new versions* of variables that need cleaning or processing (e.g. handling missing values, turning text categorical variables into numeric dummies, scaling) and (2) create *new variables* that summarize other variables in new ways (feature engineering). 
+
+To help you identify places where you need to edit the code to match
+your dataset, you can look for "@TODO" in comments. Also, please delete
+examples discussed in the text and add your own explanations
+(documentation or rationale) for decision-making for your own dataset
+and project. Finally, please answer the questions (also indicated with
+"@TODO").
+
+After you have edited the code as needed for your data and project goals
+and run all code chunks successfully, knit your completed file to a
+HTML. Download the HTML to your computer and then print or save it to a
+PDF file with the following naming convention:
+course_section_semester_assignment_unityID.pdf. For example,
+DSC495_601_FA25_Milestone3_keporte2.pdf.
+
+# Set-up
+
+#### Load the necessary packages
+
+No edits are needed in the following chunk. Just run it as is.
+
+```{r loadpackages}
+.libPaths(c("/share/dsa495601f25/installed_libraries", .libPaths()))
+library(dplyr)
+library(tidyr)
+library(skimr)   
+library(janitor)
+library(rsample)
+library(fastDummies)
+```
+
+#### Read in your data
+
+Here you can copy your code from Milestone 2.
+
+```{r readdata}
+# Replace with your file name (path specified in yaml header)
+# For CSV
+data_file <- paste0(params$data_path,"NAMEOFFILE") # @TODO edit to your filename
+df <- read.csv(data_file, sep = ";") %>% janitor::clean_names()
+  # note the bank marketing data is separated by ; instead of ,
+
+# OR for RDA
+# df <- readRDS(data_file)
+# View the name of the object loaded
+# ls()
+
+# Check that it loaded ok
+dim(df)
+head(df)
+```
+
+### Do any necessary filtering (to align with scoping)
+
+Most of the time, you do **not** need to filter your data. Filtering
+should only be done if your project scope requires you to focus on a
+**specific subset of the data**.
+
+⚠️ Important: Filtering reduces the size of your dataset. If you filter
+too much, you may not have enough data left to train and test your
+model.
+
+```{r Filtering}
+# Uncomment below and filter for specific criteria only if needed for your scoping
+#df_filtered <- df %>% 
+#  filter(VAR == "CRITERIA") # @TODO edit here filter for your criteria
+
+# Check size after filtering
+#nrow(df)
+```
+
+
+### Summarize your data
+
+This will help you get you starting in identifying what variables need data cleaning and processing. But you may need to add additional summaries or descriptive analyses. 
+
+```{r Summarize}
+# Use skimr package to get summaries of all variables
+skim(df)
+```
+
+# Step 1: Outcome Preparation & Checks
+
+First, in the empty code chunk below, create your *binary* outcome
+variable, if it does not already exist. You may reuse code from
+**Milestone 2**, but consider modifying it if needed.
+
+> 🔁 Reminder: Your outcome variable should take on only two values —
+> `0` or `1`.
+
+Think carefully about how you define the outcome:
+
+-   For example, you might set the outcome to `1` if a student
+    **passed** a course, or alternatively, `1` if a student **did not
+    pass** — depending on the question you're trying to answer.
+-   Your predictive modeling will estimate the likelihood of the outcome
+    equaling `1`.
+
+**Question 1: Describe your outcome to be predicted and what each value
+(0 and 1) means.**
+
+Implement coding of your outcome in the chunk below. Also, in the same
+code chunk, calculate and display the **prevalence** of your outcome
+variable, as you did in **Milestone 2**.
+
+⚠️ Important: Note that this will look at the prevalence in your
+filtered data. Be sure that the prevalence is not much more skewed than
+the non-filtered data! If it does, please revisit.\*\*
+
+
+```{r OutcomePrep}
+# Create binary (1 or 0) version of your outcome
+df <- df %>%
+  mutate(outcome = as.numeric(OUTCOMEVARIABLE == "FILL IN")) # @TODO Edit for your data
+
+# Check prevalence (percent of rows where the outcome is 1)
+mean(df$outcome, na.rm = TRUE)
+```
+
+## Step 2: Data Partitioning
+
+In this step, you'll divide your dataset into two parts:
+
+1.  **Training/Validation set**
+2.  **Testing set**
+
+Partitioning your data *before* any further preparation is crucial to
+prevent **data leakage** — where information from the test set
+unintentionally influences model training or feature engineering. To
+avoid this, all remaining data preparation steps will be performed
+*separately* on the training/validation and testing sets.
+
+### Random Splitting and Stratification
+
+If your data is not organized over time, or if you're looking for a
+straightforward approach, you can **randomly split** your dataset.
+
+-   If your outcome variable is **imbalanced** (e.g., very few positive
+    cases), consider **stratifying** your split by the outcome class to
+    maintain proportional representation in both sets.
+-   You may also choose to stratify by other variables if they are
+    important and have rare values. Talk to me if you have questions
+    about this.
+
+### Splitting by Time
+
+If your data spans across time (e.g., terms in the OULAD dataset or
+inspection dates in the restaurant dataset), a **time-based split** may
+be more appropriate. In this approach, you save *later observations* for
+testing, simulating a real-world scenario where models are trained on
+past data and applied to future data. But make sure your test set is
+still representative of your training/validation set (not a differnt
+time of the year). Reach out to me if you have questions about deciding
+on this or if you need help with coding it.
+
+**Question 2: Did you use random splitting or time-based splitting? Why?
+Did you stratify your split? If so, by which variable(s), and why?**
+
+### Code Example: Splitting and Saving Your Data
+
+Use the following code to split your dataset:
+
+```{r DataSplit}
+# For random splitting
+split <- initial_split(df, prop = 0.70, strata = NULL) # @TODO edit tovariable to stratify by if not NULL
+trainDat <- training(split)
+testDat  <- testing(split)
+
+# For other splitting 
+#trainDat <- df %>%
+#  filter(code_presentation %in% c("2013B","2013J")) # @TODO this is an example for OULAD, edit for your data
+#testDat <- df %>%
+#  filter(code_presentation %in% c("2014B","2014J")) # @TODO this is an example for OULAD, edit for your data
+
+# Verify train/test data split
+# Check number of rows in training dataset
+nrow(trainDat)
+
+# Check number of rows in test dataset  
+nrow(testDat)
+
+# Verify that train + test equals original dataset (should be TRUE)
+nrow(trainDat) + nrow(testDat) == nrow(df)
+
+# Calculate proportion of data used for training
+nrow(trainDat) / nrow(df)
+
+```
+
+# Step 3: Data Processing for Predictive Analytics
+
+After creating your outcome variable and partitioning your data into
+training and testing sets, data processing is crucial for model
+performance. This section will walk you through the essential steps.
+
+## (a) Handling Missing Values
+
+When building predictive models, it’s important to handle missing values
+carefully. Missingness itself can contain useful information — so we
+don’t always want to just drop or fill in the missing values without
+keeping track of them.
+
+We discussed two simple options for dealing with missing values in
+numeric (continuous) variables, and one for categorical variables.
+
+🔹 Option 1: Dummy Variable Adjustment (for numeric variables)
+
+This approach lets you keep the numeric variable, but also capture
+whether it was missing.
+
+Steps:
+
+-   Create a new variable that flags whether the value was missing (1 =
+    missing, 0 = not missing)
+
+-   Fill in the missing values using the mean of the variable
+
+-   Later, you will include both variables in your model
+
+Example:
+
+If your variable is testscore, you would:
+
+-   Create testscore_missing = 1 if missing, 0 otherwise
+
+-   Create testscore_i = original value if available, mean value if
+    missing
+
+-   Use both testscore_i and testscore_missing in your model
+
+```{r ContinuousMissing}
+#' This function implements dummy variable adjustment for handling missing data in predictive modeling.
+#' For each variable specified, it creates a missing indicator and imputes missing values with the mean.
+#' 
+#' @param data A data frame containing the variables to process
+#' @param var_names A character vector of variable names to process for missing values
+#' 
+#' @return A data frame with:
+#'   - Original variables with missing values imputed with their respective means
+#'   - New indicator variables (suffix "_missing") for each processed variable
+#'   
+#' @details For each variable in var_names, the function:
+#'   1. Calculates the mean of non-missing values
+#'   2. Creates a missing indicator (1 = missing, 0 = observed)
+#'   3. Imputes missing values with the calculated mean
+#'   
+#' @note This should be applied separately to training and test data
+
+process_missing <- function(data, var_names) {
+ for (var in var_names) {
+   var_mean <- mean(data[[var]], na.rm = TRUE)
+   missing_indicator <- is.na(data[[var]])
+   data[[var]][missing_indicator] <- var_mean
+   data[[paste0(var, "_missing")]] <- as.numeric(missing_indicator)
+ }
+ return(data)
+}
+
+# Example implementation
+vars_to_process <- c("prev_GPA_SS","prev_testscore") # @TODO edit to continuous variables in your data that you want to process in this way, then the remainder of the code should work
+trainDat <- process_missing(trainDat, vars_to_process)
+testDat <- process_missing(testDat, vars_to_process)
+
+```
+
+🔹 Option 2: Convert Continuous Numeric Variables to Categories
+
+This approach works well when the variable has meaningful thresholds
+(e.g., test score cutoffs).
+
+Example:
+
+Instead of using raw scores, you might create:
+
+-   "Below Basic" for scores 0–60
+
+-   "Basic" for scores 61–80
+
+-   "Proficient" for scores 81–100
+
+-   "Missing" for missing values
+
+This captures non-linear relationships and makes missingness just
+another category.
+
+This method may lose some detail, but it's a useful tradeoff when you
+want simpler variables with meaning.
+
+```{r MakeCategorical}
+# Convert numeric variable to meaningful categories with "Missing"
+convert_numeric_to_category <- function(vec, breaks, labels) {
+  # Create categories using cut
+  cat_var <- cut(vec, breaks = breaks, labels = labels, include.lowest = TRUE)
+  
+  # Add a "Missing" category
+  cat_var <- addNA(cat_var)
+  levels(cat_var)[is.na(levels(cat_var))] <- "Missing"
+  
+  return(cat_var)
+}
+
+# Example: Binning 'testscore' into performance categories
+trainDat$testscore_cat <- convert_numeric_to_category(
+  vec = trainDat$testscore, # @TODO edit to match a variable in your data if desired/applicable
+  breaks = c(-Inf, 60, 80, Inf), # @TODO edit to define breaks based on the distribution of your data
+  labels = c("Below Basic", "Basic", "Proficient") # @TODO edit to match your variable
+)
+# Repeat exact same in Test Data. Use same breaks and labels as for the training data
+testDat$testscore_cat <- convert_numeric_to_category(
+  vec = testDat$testscore, # @TODO edit to match a variable in your data if desired/applicable
+  breaks = c(-Inf, 60, 80, Inf), # @TODO edit to define breaks based on the distribution of your data
+  labels = c("Below Basic", "Basic", "Proficient") # @TODO edit to match your variable
+)
+# @TODO copy and paste the above code and edit for all variables you want to repeat this process for
+
+```
+
+🔹 Option 3: Add a "Missing" Category (for existing categorical
+variables)
+
+For categorical variables, simply add a "Missing" category. That way,
+missing values are treated like any other level. However, this can be
+handled simultaneously with "one-hot coding" in the next section.
+Therefore, if you have a categorical variable with missing values, this
+will be addressed below.
+
+**Note**: If you have just a few missing values for a variable, then
+your category for missing will be very tiny. You can then combine the
+missing category with another category. For example, if you have 3
+missing values for gender, then I would recommend, that you have one
+category as female and one category that contains both male and missing.
+
+**Question 3: Do you have missing values? If so, which option(s) did you
+use to handle missing values (dummy variable adjustment, binning, or
+“Missing” category)? Why did you make the choices you did? Do you think
+missingness itself might be predictive in your dataset? Explain
+briefly.**
+
+## (b) One-Hot Encoding (Dummy Variables) for Categorical Variables
+
+Some machine learning models — like `glmnet` (for lasso, ridge), `keras`
+(for neural networks), or support vector machines — **only work with
+numeric data**. This means we need to turn categorical variables into
+numbers.
+
+The most common way to do this is called **one-hot encoding** (or
+**dummy coding**). This creates a new column for each category in your
+variable, with values of `1` (yes) or `0` (no).
+
+As noted above, this procedure will also deal with missing values in
+categorical variables because it will create a missing value for NA or
+other indicator of missing.
+
+### ✅ Dummy Coding with `fastDummies::dummy_cols()`
+
+Let’s say you want to create dummy variables for:
+
+-   `"school_type"`
+-   `"testscore_cat"`
+
+Here’s the code:
+
+```{r OneHotCoding}
+# Specify columns of categorical variables you want to one hot code
+cat_columns = c("marital", "education","contact") # @TODO edit for variables in your data
+
+trainDat <- fastDummies::dummy_cols(
+  trainDat,
+  select_columns = cat_columns, 
+  remove_selected_columns = TRUE
+)
+
+testDat <- fastDummies::dummy_cols(
+  testDat,
+  select_columns = cat_columns,
+  remove_selected_columns = TRUE
+)
+```
+
+This will automatically create new columns like:
+
+-   `school_type_Public`, `school_type_Private`
+-   `testscore_cat_Low`, `testscore_cat_Medium`, etc.
+
+Each is a **0/1 column**, and the original variable is removed.
+
+### Handling Missing Values
+
+By default, fastDummies::dummy_cols() treats NA as its own category. It
+creates a dummy column called something like var_NA. That column is 1 if
+the value was missing, 0 otherwise.
+
+### ⚠️ Be Careful with Numeric Variables
+
+`dummy_cols()` will also create dummy variables for numeric columns —
+**but that’s not always what you want.**
+
+> ❌ **Don’t use dummy_cols() on numeric variables like GPA, test score,
+> or age** if they have lots of different values. This will create a
+> dummy column for every unique number, which is not useful.
+
+**Question 4: Which variables did you one-hot encode? Why?**
+
+## (c) Scaling
+
+Often, variables used in machine learning models have different ranges.
+Without scaling, variables with larger absolute values will dominate the
+prediction outcome regardless of their actual importance. To give each
+feature a fair opportunity to contribute to the prediction outcome, we
+must bring all features to a comparable scale.
+
+The two common scaling techniques are:
+
+1.  **Standardization (Z-score Scaling)**: This technique transforms
+    features to have zero mean and unit variance by subtracting the mean
+    and dividing by the standard deviation. This is generally the
+    recommended approach because:
+    -   It preserves the shape of the feature's distribution while
+        making units comparable
+    -   It works well with regularization since all features are
+        centered around zero (which we will discuss later)
+    -   It handles outliers better than other methods
+    -   Most statistical learning methods are developed assuming
+        standardized features
+2.  **Normalization (Min-Max Scaling)**: This technique scales feature
+    values to a fixed range of [0,1]. While less commonly needed,
+    normalization is useful in specific cases:
+    -   When working with neural networks, particularly in the output
+        layer when predicting probabilities
+    -   When working with algorithms that use distance measures and you
+        want to ensure equal distance weight (e.g., KNN)
+
+**Important Notes:**
+
+-   For most predictive modeling tasks, standardization is the safer
+    default choice.
+
+-   Tree-based algorithms (decision trees, random forest, XGBoost) don't
+    require scaling, but since we will be using a variety of ML
+    algorithms, we will prepare data as such.
+
+-   For highly skewed features, consider log transformation before
+    scaling
+
+Example code for standardization:
+
+```{r standardize}
+#' Standardize Features for Predictive Modeling
+#'
+#' @param data A data frame containing features to standardize
+#' @param features Character vector of feature names to standardize
+#' @param suffix Character suffix for new columns (defaults to "_std")
+#' @return Original data frame with added standardized columns
+#'
+standardize_features <- function(data, features, suffix = "_std") {
+ 
+ # Calculate means and sds for all features at once
+ scaling_params <- data %>%
+   summarise(across(all_of(features),
+                   list(mean = ~mean(., na.rm = TRUE),
+                        sd = ~sd(., na.rm = TRUE)))) %>%
+   pivot_longer(everything(),
+               names_to = c("feature", "stat"),
+               names_sep = "_") %>%
+   pivot_wider(names_from = stat, values_from = value)
+ 
+ # Add standardized versions
+ result_data <- data %>%
+   mutate(across(all_of(features),
+                ~(. - scaling_params$mean[scaling_params$feature == cur_column()]) /
+                  scaling_params$sd[scaling_params$feature == cur_column()],
+                .names = "{.col}{suffix}"))
+ 
+ # Store parameters as attribute
+ attr(result_data, "scaling_params") <- scaling_params
+ 
+ return(result_data)
+}
+
+# Example usage:
+features_to_scale <- c("week1") # @TODO Edit variables to be scaled here. 
+trainDat <- standardize_features(trainDat, features_to_scale)
+testDat <- standardize_features(testDat, features_to_scale)
+
+```
+
+**Question 5: Which variables did you scale? Describe the scaling you
+did.**
+
+## (d) Feature engineering
+
+Predictor variables in machine learning are often called "features."
+Feature engineering is the process of transforming raw data into
+meaningful inputs that enhance the performance of predictive models. It
+involves creating, modifying, or selecting features to better capture
+the underlying patterns in the data, leveraging both domain expertise
+and statistical techniques. While some of the earlier data processing
+steps may overlap with feature engineering, the focus here is on
+developing new features from raw data—such as combining variables in
+ways that extract predictive information or generating key interaction
+terms. This steps takes advantage of domain knowledge and data
+experience.
+
+Use this section for feature engineering. Keep in mind that if you have
+multiple ideas for feature engineering that seem to overlap, you do not
+need to select just one. For example, if you have daily student
+attendance, you might create features that summarize attendance as the
+total number of days present, calculate the percentage of days attended,
+or flag periods of consecutive absences. You can create all of these
+features—you don't need to pick just one.
+
+Finally, remember to incorporate the practices outlined above for
+handling missing values, scaling, and one-hot encoding to ensure your
+features are prepared appropriately for modeling, and remember to
+feature engineering identically but separately for training/validation
+data and for testing data.
+
+```{r}
+# Use this chunk for feature engineering. Feel free to add more chunks too. 
+```
+
+**Question 6: Did you create any new features from your raw data? If so,
+describe at least one and explain why you thought it might help
+prediction.**
+
+# Step 4: Review and check your results
+
+Now that you’ve finished preparing your training and testing data, it’s
+important to **review your datasets carefully** before moving on to
+modeling. This step helps you confirm that your processing was
+successful and that you didn’t accidentally introduce problems.
+
+### ✅ Things to check
+
+1.  **Dimensions**
+
+    -   Did the number of rows stay the same after processing?
+    -   Did the number of columns change the way you expected (e.g.,
+        more columns after dummy coding)?
+
+2.  **Outcome variable**
+
+    -   Is your outcome variable still present in both training and test
+        sets?
+    -   Does it still take on only two values (`0` and `1`)?
+
+3.  **Missing values**
+
+    -   Are missing values handled the way you intended (e.g.,
+        `_missing` columns created, `_NA` dummies, or binned
+        categories)?
+
+4.  **Scaling**
+
+    -   Do your standardized variables have mean ≈ 0 and sd ≈ 1 (in the
+        training data)?
+
+5.  **Consistency between train and test**
+
+    -   Do the two datasets have the **exact same variables in the same
+        order**?
+    -   This is essential for modeling.
+
+### 🛠 Example code to help with checks (add more so that you feel confident)
+
+```{r CheckResults}
+### 🛠 Example code to help with checks
+
+# Peek at the first rows
+head(trainDat)
+
+# Skim again and focus on new variables
+skimr::skim(trainDat)
+
+# Alignment check: make sure train and test have identical variables
+all.equal(names(trainDat), names(testDat))
+```
+
+### ⚠️ Notes for Students
+
+-   If `all.equal()` returns `"TRUE"`, your train and test sets match.
+    🎉
+
+-   If not, it will show which variable names differ.
+
+-   Common reasons include:
+
+    -   A category only appeared in one dataset (dummy coding mismatch)
+    -   A variable got dropped by mistake in one dataset but not the
+        other
+
+If you see mismatches, **fix them before moving on to modeling**.
+
+**Question 7: Do you feel confident your data is ready for at least a
+first round of modeling? Why or why not?**
+
+# Step 5: Save your processed training and testing files
+
+```{r SaveFiles}
+# Save you training and testing data files using the file path for dataInputPath
+saveRDS(trainDat, file = paste0(params$my_path, "trainDat.rds"))
+saveRDS(testDat, file = paste0(params$my_path, "testDat.rds"))
+
+```

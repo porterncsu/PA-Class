@@ -1,0 +1,117 @@
+---
+title: "DSA 495 601 Project Milestone 2"
+author: "Your Name"
+output:
+  html_document:
+    toc: true
+    toc_depth: '1'
+    df_print: paged
+  html_notebook:
+    toc: true
+    toc_depth: 1
+    number_sections: false
+    code_folding: hide
+editor_options:
+  chunk_output_type: inline
+params:
+  data_path: /share/dsa495601f25/project_data_sets/bank_marketing/
+---
+
+For Milestone 2, select your dataset for the project and then complete this markdown. Knit your completed file to a HTML. Download the HTML to your computer and then print or save it to a PDF file with the following naming convention:  course_section_semester_assignment_unityID.pdf. For example, DSC495_601_FA25_Milestone2_keporte2.pdf. 
+
+Due: Septebmer 18 before class. 
+
+
+# Dataset Selection
+
+**Question:** What dataset did you choose? *(Provide the file name or brief description)*
+
+I chose the dataset: `example_dataset.csv`\
+This dataset contains provides the opportunity to learn...
+
+# Project Scoping
+
+#### (a) What is the **binary outcome** you plan to predict?
+
+The binary outcome I'm predicting is:\
+`outcome_variable` — where 1 = [positive class], 0 = [negative class]
+
+#### (b) Who is your **target population**?
+
+My target population is:\
+To filter for this group, I will subset rows where...
+
+#### (c) **When** are you making the prediction?
+
+I’m making predictions at the point when...\
+At this time, I have access to data such as...
+
+#### (d) Why would **predictive analytics** be valuable here?
+
+Predictive analytics could help by...\
+The results may be used by...
+
+# Read & Explore Your Dataset
+
+#### Load the necessary packages
+
+```{r loadpackages}
+.libPaths(c("/share/dsa495601f25/installed_libraries", .libPaths()))
+library(dplyr)
+library(skimr)   # For easy summaries
+library(janitor) # For formatting object names
+```
+
+#### Read in your data
+
+```{r readdata}
+# Replace with your file name (path specified in yaml header)
+# For CSV
+data_file <- paste0(params$data_path,"NAMEOFFILE")
+df <- read.csv(data_file, sep = ";") %>% janitor::clean_names()
+  # note the bank marketing data is separated by ; instead of ,
+
+# OR for RDA
+# load(data_file)
+# View the name of the object loaded
+# ls()
+```
+
+#### How many rows and columns?
+
+```{r dimensions}
+dim(df)  # Returns rows and columns
+```
+
+#### Make the outcome binary (if needed)
+
+```{r binaryoutcome}
+# Example: turn "yes"/"no" into 1/0
+df <- df %>%
+  mutate(outcome_binary = if_else(outcome == "yes", 1, 0))
+```
+
+#### Check distribution of the binary outcome
+
+```{r outcomecheck}
+# Replace 'outcome_binary' with your actual column name
+df %>%
+  count(outcome_binary) %>%
+  mutate(percent = n / sum(n) * 100)
+```
+
+#### Get a summary of your data
+
+```{r summary}
+# Overview using skim
+skim(df)
+
+# OR: glimpse for a compact preview
+glimpse(df)
+```
+
+# Questions About the Data
+
+#### What questions do you have about the data at this time?
+
+Some questions I have include:

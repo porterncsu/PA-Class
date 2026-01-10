@@ -1,0 +1,73 @@
+version: 2
+
+seeds:
+  - name: bank-full
+    columns:
+      - name: age
+        tests:
+          - no_negative_counts
+          - reasonable_percentage:
+              min_pct: 18
+              max_pct: 100
+      
+      - name: balance
+        tests:
+          - no_extreme_outliers:
+              std_devs: 3
+      
+      - name: job
+        tests:
+          - text_not_empty
+          - valid_categorical_values:
+              valid_values: ['admin.', 'technician', 'services', 'management', 'retired', 'blue-collar', 'unemployed', 'entrepreneur', 'housemaid', 'unknown', 'self-employed', 'student']
+      
+      - name: marital
+        tests:
+          - valid_categorical_values:
+              valid_values: ['married', 'single', 'divorced']
+
+  - name: diabetes_binary_5050split_health_indicators_BRFSS2015
+    columns:
+      - name: Diabetes_binary
+        tests:
+          - valid_categorical_values:
+              valid_values: ['0', '1']
+      
+      - name: BMI
+        tests:
+          - no_negative_counts
+          - reasonable_percentage:
+              min_pct: 10
+              max_pct: 80
+      
+      - name: Age
+        tests:
+          - valid_categorical_values:
+              valid_values: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13']
+
+  - name: food-inspections-sample-10K
+    columns:
+      - name: Inspection_Date
+        tests:
+          - reasonable_date_range:
+              earliest_date: '2010-01-01'
+              latest_date: '2025-12-31'
+      
+      - name: Facility_Type
+        tests:
+          - text_not_empty
+      
+      - name: Risk
+        tests:
+          - valid_categorical_values:
+              valid_values: ['Risk 1 (High)', 'Risk 2 (Medium)', 'Risk 3 (Low)', 'All']
+
+  - name: oulad_bbb_cleaned
+    columns:
+      - name: date
+        tests:
+          - no_negative_counts
+      
+      - name: sum_click
+        tests:
+          - no_negative_counts
