@@ -1,57 +1,57 @@
 ---
 title: "Welcome Letter"
 author: "Kristin Porter"
-date: "August 14, 2025"
+date: "January 9, 2026"
 output: html_document
 ---
 
 Dear Student,
 
-Welcome to Predictive Analytics for Improving Services (DSC495, Section 601) taught during the Fall 2025 semester. I am very excited to be teaching this class! I am writing prior to the official semester start to cover a few items so we get off to a strong start.
+Welcome to Predictive Analytics for Improving Services (DSC435, Section 601) taught during the Spring 2026 semester. I am very excited to be teaching this class! I am writing prior to the official semester start to cover a few items so we get off to a strong start.
 
 ## Course Summary
 
 First, I want to offer some more detailed information about the course so that you can decide for sure, as best you can, if this course is right for you.
 
-- **Description:** For-profit companies, nonprofit service providers and government agencies often use predictive analytics to improve their services. Predictive analytics harnesses historical data and may incorporate machine learning to model future outcomes. Students will explore the value, limitations and ethical considerations of predictive analytics when used to improve services. Choosing from a curated set of data sets provided by the instructor, students will learn and apply a practical approach for planning, implementing and assessing a predictive analytics project. The instruction will highlight topics related to data preparation, model training and selection, validation, fairness, transparency and communication of results.
+-   **Description:** For-profit companies, nonprofit service providers and government agencies often use predictive analytics to improve their services. Predictive analytics harnesses historical data and may incorporate machine learning to model future outcomes. Students will explore the value, limitations and ethical considerations of predictive analytics when used to improve services. Choosing from a curated set of data sets provided by the instructor, students will learn and apply a practical approach for planning, implementing and assessing a predictive analytics project. The instruction will highlight topics related to data preparation, model training and selection, validation, fairness, transparency and communication of results.
 
-- **Prerequisites:** Students should have familiarity with R Studio and experience using R to manipulate data and run basic descriptive statistics.
+-   **Prerequisites:** Students should have familiarity with R Studio and experience using R to manipulate data and run basic descriptive statistics.
 
-- **Delivery:** We will meet once a week, Thursdays 11:45 - 12:35 by Zoom. I will provide short background readings for each weekly session. There is no reading required for our first class.
+-   **Delivery:** We will meet once a week, Thursdays 11:45 - 12:35 by Zoom. I will provide short background readings for each weekly session. There is no reading required for our first class.
 
-- **Project and coding:** Students will complete an individual project implementing the workflow of a predictive analytics project. The project has multiple milestones, which we will complete gradually over the course of the semester. For most code needed for the project, I will provide templates. We will use a NCSU server so that you can avoid installation and version problems. More details for accessing the server are forthcoming.
+-   **Project and coding:** Students will complete an individual project implementing the workflow of a predictive analytics project. The project has multiple milestones, which we will complete gradually over the course of the semester. For most code needed for the project, I will provide templates. We will use a NCSU server so that you can avoid installation and version problems. More details for accessing the server are forthcoming.
 
-- **Learning Online:** While online education offers great flexibility, it can also require a different approach to learning than you might be used to. Are you ready to learn online? Take this free Online Learning Readiness Questionnaire to assess your readiness for online learning, and learn some tips for success based on your responses.
+-   **Learning Online:** While online education offers great flexibility, it can also require a different approach to learning than you might be used to. Are you ready to learn online? Take this free Online Learning Readiness Questionnaire to assess your readiness for online learning, and learn some tips for success based on your responses.
 
 ## Course Access
 
 Next, I want to give you the information you need to access the online components of this course, which are delivered using a learning management system called Moodle.
 
-- You must have an Internet connection and a standard, up-to-date Web browser (Mozilla Firefox and Google Chrome browsers are preferred).
+-   You must have an Internet connection and a standard, up-to-date Web browser (Mozilla Firefox and Google Chrome browsers are preferred).
 
-- To access the course, log into Wolfware, click the "Log in" button in the upper right-hand corner, and enter your NC State Unity ID and password. You'll find this course in the "current" tab. Click on the course title to access the course in Moodle.
+-   To access the course, log into Wolfware, click the "Log in" button in the upper right-hand corner, and enter your NC State Unity ID and password. You'll find this course in the "current" tab. Click on the course title to access the course in Moodle.
 
-- The online course should now be available in Wolfware, while the first official day of the semester is January 6.
+-   The online course should now be available in Wolfware, while the first official day of the semester is January 6.
 
-- If you have any technical difficulties accessing the course, please reach out to the Office of Information Technology's Help Desk by calling 919-515-HELP or emailing help@ncsu.edu. (See the IT Services for Students page for more technical resources).
+-   If you have any technical difficulties accessing the course, please reach out to the Office of Information Technology's Help Desk by calling 919-515-HELP or emailing help\@ncsu.edu. (See the IT Services for Students page for more technical resources).
 
 ## About the Instructor
 
-My name is Kristin. I live in Berkeley, California. I am a statistician and data scientist. I have a PhD in biostatistics, as well as a Masters in Public Policy. I have dedicated my career to using quantitative methods to improve social programs in the areas of education, job training, children and families and criminal justice. I am a senior fellow at a nonprofit research organization, MDRC, where I have worked for 18 years. The frameworks, code and many examples I will draw on for this class come from past and ongoing work with MDRC. My colleagues and I have thought a lot about the value of predictive analytics for improving services, as well as the limitations and potential wrong turns. This is my second time teaching this course, and I am learning as I go about what works best for all of you. I have tried to build in flexibility to adjust our pace as needed. I am eager for your feedback throughout the course. Please do not hesitate to reach out with questions and suggestions at any time! My NCSU email is keporte2@NCSU.edu.
+I live in Berkeley, California. I am a statistician and data scientist. I have a PhD in biostatistics, as well as a Masters in Public Policy. I have dedicated my career to using quantitative methods to improve social programs in the areas of education, job training, children and families and criminal justice. I am a senior fellow at a nonprofit research organization, MDRC, where I have worked for 18 years. The frameworks, code and many examples I will draw on for this class come from past and ongoing work with MDRC. My colleagues and I have thought a lot about the value of predictive analytics for improving services, as well as the limitations and potential wrong turns. This is my second time teaching this course, and I am learning as I go about what works best for all of you. I have tried to build in flexibility to adjust our pace as needed. I am eager for your feedback throughout the course. Please do not hesitate to reach out with questions and suggestions at any time! My NCSU email is keporte2\@NCSU.edu.
 
 ## Get Started!
 
-Finally, I want to provide you with steps for how and when to get started in this course. Before our first session on January 9, I encourage you to log into the course Moodle through Wolfware. Please contact me immediately if you are unable to log into the course.
+Finally, I want to provide you with steps for how and when to get started in this course. Before our first session on January 15, I encourage you to log into the course Moodle through Wolfware. Please contact me immediately if you are unable to log into the course.
 
 Also, please complete these items in the first week of class:
 
-- Find these optional and reference materials at the top of the Moodle page
-- Orientation for students new to Moodle
-- This welcome letter for your reference
-- Review the syllabus, also on Moodle
-- Introduce yourself to me and your class in the forum space provided
+-   Find these optional and reference materials at the top of the Moodle page
+-   Orientation for students new to Moodle
+-   This welcome letter for your reference
+-   Review the syllabus, also on Moodle
+-   Introduce yourself to me and your class in the forum space provided
 
-I am excited to have you join this course and look forward to learning with you this semester. If you have questions prior to the course, you can contact me at keporte2@ncsu.edu.
+I am excited to have you join this course and look forward to learning with you this semester. If you have questions prior to the course, you can contact me at keporte2\@ncsu.edu.
 
 Sincerely,
 
