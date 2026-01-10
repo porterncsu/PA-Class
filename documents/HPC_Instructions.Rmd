@@ -1,0 +1,32 @@
+---
+title: "Instructions for Using HPC R Studio Server"
+output: html_document
+---
+
+## URL
+
+**servood.hpc.ncsu.edu** (Log in with your NCSU credentials.)
+
+- Select "NC State University" from the "Select Your Campus" dropdown, check the "Remember My Selection" box, and click "submit" (login with your unityID and password).
+
+## To navigate to and use our class space
+
+- In the dark gray banner at the top, click on **Files** and select "Home Directory".
+- Above the folders, in the light gray banner, click on **Change directory**, type: `/share/dsc435601s26` and then press OK.
+- You should see a folder titled with your NCSU username. All files you use for your project will be in this folder.
+- To upload and download files, use the blue buttons in the upper right corner of this page.
+
+## To launch an R Studio session
+
+- In the dark gray banner at the top, click on **My Interactive Sessions**.
+- Click on **R Studio Server**.
+- Fill in the form as follows:
+  - Leave the **Queue** blank.
+  - Select the **Number of hours** you think you will need for the current session.
+  - Select the **Number of processors**: For most coding, you will want to choose 1. However, when you are running machine learning algorithms in our code templates, then I recommend 4.
+  - Select the **Amount of memory**: If you're working with small datasets (<1 GB), then 4-8GB of RAM is likely sufficient. If you're working with medium data (1GB-10GB), aim for 16-32GB.
+  - Select the **Version of R Container**: This should be 4.4.0.
+  - Specify the **Path to User Libraries**: This should be `/gpfs_common/share02/dsc435601s26/installed_libraries`.
+- Click on **Launch**.
+- The server may take a minute or so to launch. When it is ready, click on the blue button that says **Connect to RStudio Server**.
+- If you finish early or make a mistake launching a session, then click on **Delete** on the page for My Interactive Sessions.
