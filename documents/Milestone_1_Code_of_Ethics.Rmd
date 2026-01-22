@@ -7,7 +7,7 @@ output: pdf_document
 
 # Milestone 1: Code of Ethics
 
-**Due:** February 29, 2026 (before class)
+**Due:** January 29, 2026 (before class)
 
 ## Motivation
 
