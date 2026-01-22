@@ -1,0 +1,91 @@
+---
+title: "Milestone 1: Code of Ethics"
+
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+# Milestone 1: Code of Ethics
+
+**Due:** February 29, 2026 (before class)
+
+## Motivation
+
+To ensure that ethical considerations are given attention throughout the course of a data science project, one practice (of many) that data science teams can take is to develop a "Code of Ethics" to guide the work. Ideally, the Code of Ethics would be created with input from all stakeholders of the project and would be revisited throughout the project to remind team members of its guiding principles and to be revised as issues arise. You do not have a team to consult, but we will return to ethical guiding principles throughout the course.
+
+## Overview of Assignment
+
+Draft a Code of Ethics that would guide a predictive analytics proof-of-concept project. You may have a specific example of a project in mind as you develop this, or you can keep it general to apply broadly to predictive analytics for improving services. You are encouraged to look at examples of other resources that already exist (see below or find others through your own research) - you do not need to reinvent the wheel, but also feel free to just apply your own knowledge and ideas.
+
+## Expectations
+
+-   **Length:** 1-2 pages, including bullets or a table.
+-   List at least 6 guiding principles and define them.
+-   For each principle, write a sentence or two about how the principle applies to predictive analytics for improving services.
+-   **NO AI FOR THIS MILESTONE.**
+
+## Credit
+
+10 points. (This milestone is one of 6 milestones for which points add up to 100.)
+
+## Late Policy
+
+-   Assignments lose 10% of the possible points per calendar day late.
+-   But each student has 5 "late days" to use during the semester, with no penalty. You may:
+    -   Use them one day at a time (e.g., five assignments turned in 1 day late each)
+    -   Use them all on one assignment (e.g., one assignment turned in 5 days late)
+    -   Use them in other configurations
+-   Late days are automatically applied; no need to ask.
+-   Late work will be accepted for feedback regardless of penalties.
+
+## How to Turn In
+
+-   Please create a PDF file.
+-   Please use the following naming convention to name the file for this assignment: `course_section_semester_assignment_unityID.pdf`. For example, `DSC435_601_SP26_Milestone1_keporte2.pdf`
+-   Upload to Gradescope - through Moodle.
+
+## Resources
+
+## Professional Organization Codes
+
+**ACM Code of Ethics and Professional Conduct** (Association for Computing Machinery)
+https://www.acm.org/code-of-ethics
+- Comprehensive code covering computing professionals including data scientists
+- Updated in 2018 with sections on general ethical principles, professional responsibilities, and leadership principles
+
+**ASA Ethical Guidelines for Statistical Practice** (American Statistical Association)
+https://www.amstat.org/about-asa/ethical-guidelines-for-statistical-practice
+- Most recently revised in 2022
+- Covers professional integrity, data methods, responsibilities to stakeholders and research subjects
+
+**Data Science Association Code of Conduct**
+https://www.datascienceassn.org/code-of-conduct.html
+- Specific to data science professionals
+- Includes detailed terminology definitions and rules for maintaining integrity
+
+**DASCA Code of Ethics** (Data Science Council of America)
+https://www.dasca.org/about-data-science-council-of-america/dasca-code-of-ethics
+- Emphasizes integrity, fairness, accountability, and transparency
+- Includes commitments to privacy protection and addressing bias
+
+**USDSI Code of Ethics and Standards** (US Data Science Institute)
+https://www.usdsi.org/ethics-and-standards
+- Based on "3 Vs": Vision, Values, Virtues
+- Updated annually
+
+## Government/Institutional Frameworks
+
+**Federal Data Strategy Data Ethics Framework**
+https://resources.data.gov/assets/documents/fds-data-ethics-framework.pdf
+- For federal employees working with data
+- Includes tenets on upholding regulations, promoting public good, and transparency
+
+**Stanford Data Science Code of Conduct**
+https://datascience.stanford.edu/about/about-stanford-data-science/stanford-data-science-code-conduct
+- Community-focused code emphasizing inclusivity and respect
+
+**Royal Statistical Society & Institute of Actuaries Guide for Ethical Data Science**
+https://rss.org.uk/RSS/media/News-and-publications/Publications/Reports%20and%20guides/A-Guide-for-Ethical-Data-Science-Final-Oct-2019.pdf
+- Comprehensive UK-based guide covering professional competence, privacy, fairness, and accountability
+
+These codes share common themes around integrity, avoiding harm, transparency, privacy protection, and addressing bias, but each brings unique perspectives based on their organizational context.
