@@ -1,0 +1,11 @@
+student_id,name,major,gpa,year,credits_completed
+1,Alex Johnson,Statistics,3.45,Junior,72
+2,Maria Garcia,Data Science,3.82,Senior,98
+3,James Lee,Computer Science,3.21,Sophomore,34
+4,Sarah Chen,Mathematics,3.67,Junior,65
+5,David Kim,Statistics,2.95,Freshman,12
+6,Emily Brown,Data Science,3.91,Senior,105
+7,Michael Davis,Computer Science,3.12,Sophomore,40
+8,Jessica Wilson,Mathematics,3.55,Junior,70
+9,Ryan Martinez,Statistics,3.38,Senior,92
+10,Amanda Taylor,Data Science,3.74,Freshman,15

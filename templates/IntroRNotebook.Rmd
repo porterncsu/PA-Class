@@ -1,0 +1,94 @@
+---
+title: "Introduction to R Notebooks"
+author: "Your Name"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    df_print: paged
+params:
+  data_path: /share/dsa435601s26/PA-Class/project_data_sets/sample/
+---
+
+# What is an R Notebook?
+
+An R Notebook (or R Markdown document) lets you combine **text**, **code**, and **output** all in one document. This is useful because:
+
+- You can explain your thinking alongside your code.
+- Your analysis is reproducible -- anyone can re-run it.
+- You can produce polished HTML, PDF, or Word reports from a single file.
+
+A `.Rmd` file has three types of content:
+
+1. **YAML header** -- the block at the top between `---` lines that controls the document settings.
+2. **Markdown text** -- plain text with simple formatting (like this section).
+3. **Code chunks** -- blocks of R code that run and display results.
+
+# Markdown Basics
+
+You can format text using Markdown:
+
+- **Bold** with `**double asterisks**`
+- *Italic* with `*single asterisks*`
+- `Inline code` with backticks
+- Bulleted lists with `-`
+- Numbered lists with `1.`, `2.`, etc.
+- Headers with `#`, `##`, `###`
+
+# Your First Code Chunk
+
+A code chunk starts with ` ```{r} ` and ends with ` ``` `. When you "knit" the document, R runs each chunk and inserts the output below it.
+
+```{r first-chunk}
+# This is a comment -- R ignores lines starting with #
+# Let's do some basic arithmetic
+2 + 3
+10 / 4
+```
+
+
+# Reading Data from a File
+
+In your projects, you will read data from external files.
+
+```{r read-data, eval=FALSE}
+# Read a CSV file
+my_data <- read.csv(paste0(params$data_path,"sample_students.csv"))
+
+# View the first few rows
+head(my_data)
+
+# Check the structure
+str(my_data)
+```
+
+# Chunk Options
+
+You can control how each chunk behaves by adding options inside `{r}`:
+
+| Option            | Effect                                  |
+|-------------------|-----------------------------------------|
+| `echo=FALSE`      | Hide the code, show only the output     |
+| `eval=FALSE`      | Show the code but don't run it          |
+| `message=FALSE`   | Suppress package messages               |
+| `warning=FALSE`   | Suppress warnings                       |
+| `fig.width=8`     | Set figure width (inches)               |
+| `fig.height=5`    | Set figure height (inches)              |
+
+# Knitting Your Document
+
+To produce the final report, click the **Knit** button in RStudio (or press `Ctrl+Shift+K` / `Cmd+Shift+K`). This will:
+
+1. Run all code chunks from top to bottom in a clean environment.
+2. Combine the text, code, and output into an HTML file.
+
+**Tip:** If knitting fails, the error message will tell you which chunk caused the problem. Fix that chunk and try again.
+
+# Try It Yourself
+
+```{r practice}
+# Try writing your own code here!
+# For example, create a vector of your favorite numbers and compute the mean.
+
+```
