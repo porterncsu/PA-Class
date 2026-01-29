@@ -12,7 +12,7 @@ output: html_document
 ## To navigate to and use our class space
 
 - In the dark gray banner at the top, click on **Files** and select "Home Directory".
-- Above the folders, in the light gray banner, click on **Change directory**, type: `/share/dsc435601s26` and then press OK.
+- Above the folders, in the light gray banner, click on **Change directory**, type: `/share/dsa435601s26` and then press OK.
 - You should see a folder titled with your NCSU username. All files you use for your project will be in this folder.
 - To upload and download files, use the blue buttons in the upper right corner of this page.
 
