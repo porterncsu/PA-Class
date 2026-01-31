@@ -1,300 +1,100 @@
 ---
-title: "Online Shoppers Purchasing Intention Dataset Summary"
+title: "Online Shoppers Purchasing Intention Dataset"
 output:
+  html_document:
+  pdf_document:
   html_notebook: default
-  html_document: default
 ---
 
-This notebook provides a summary of the Online Shoppers Purchasing Intention dataset from the UCI Machine Learning Repository. The dataset contains feature vectors for 12,330 online shopping sessions. The target variable `Revenue` indicates whether a session ended in a purchase.
+The Online Shoppers Purchasing Intention dataset comes from the UCI Machine Learning Repository. Each row represents one online shopping session, with information about the pages visited (administrative, informational, and product-related), time spent on each page type, Google Analytics metrics (bounce rates, exit rates, page values), and session context (month, weekend, visitor type, operating system, browser, region, traffic source). The binary outcome variable `Revenue` indicates whether the session ended in a purchase. If Revenue = TRUE, the visitor made a purchase. If Revenue = FALSE, they did not.
 
-## Load Libraries and Data
+This dataset is from the UCI Machine Learning Repository: <https://archive.ics.uci.edu/ml/datasets/Online+Shoppers+Purchasing+Intention+Dataset> and the Kaggle page: <https://www.kaggle.com/datasets/imakash3011/online-shoppers-purchasing-intention-dataset>.
 
-```{r message=FALSE, warning=FALSE}
-# Load required libraries
-library(tidyverse)
-library(skimr)
-library(corrplot)
+```{r setup, message=FALSE, warning=FALSE, echo=FALSE}
+knitr::opts_chunk$set(include = TRUE, echo = FALSE, warning = FALSE, message = FALSE, comment = NA)
+# Packages used in this notebook
+pkgs <- c("tidyverse", "skimr", "janitor", "gtsummary", "readr", "stringr", "purrr")
+to_install <- pkgs[!pkgs %in% rownames(installed.packages())]
+if (length(to_install)) install.packages(to_install, quiet = TRUE)
+invisible(lapply(pkgs, library, character.only = TRUE))
+
+theme_set(theme_minimal(base_size = 13))
 ```
 
-```{r message=FALSE}
-# Load the dataset
-shoppers <- read_csv("project_data_sets/online_shoppers/online_shoppers_intention.csv")
+Let's start by looking at the dimensions of the dataset.
 
-# Display first few rows
-head(shoppers)
+```{r read-data}
+# import .csv file
+data <- read_csv("project_data_sets/online_shoppers/online_shoppers_intention.csv") %>%
+  janitor::clean_names()
+
+# print dimensions
+tibble(
+  rows = nrow(data),
+  columns = ncol(data)
+)
 ```
 
-## Dataset Dimensions
+Let's take a look at the columns. Here I have inserted some descriptions from the documentation.
 
 ```{r}
-# Number of observations and variables
-cat("Number of observations:", nrow(shoppers), "\n")
-cat("Number of variables:", ncol(shoppers), "\n")
+tribble(
+  ~variable,                  ~description,
+  "administrative",           "Number of administrative pages visited (numeric)",
+  "administrative_duration",  "Total time spent on administrative pages in seconds (numeric)",
+  "informational",            "Number of informational pages visited (numeric)",
+  "informational_duration",   "Total time spent on informational pages in seconds (numeric)",
+  "product_related",          "Number of product-related pages visited (numeric)",
+  "product_related_duration", "Total time spent on product-related pages in seconds (numeric)",
+  "bounce_rates",             "Average bounce rate of pages visited (numeric)",
+  "exit_rates",               "Average exit rate of pages visited (numeric)",
+  "page_values",              "Average page value of pages visited (numeric)",
+  "special_day",              "Closeness to a special day such as Valentine's Day (numeric, 0 to 1)",
+  "month",                    "Month of the session (categorical)",
+  "operating_systems",        "Operating system of the visitor (categorical, integer-coded)",
+  "browser",                  "Browser used by the visitor (categorical, integer-coded)",
+  "region",                   "Geographic region of the visitor (categorical, integer-coded)",
+  "traffic_type",             "Traffic source type (categorical, integer-coded)",
+  "visitor_type",             "Returning, new, or other visitor (categorical)",
+  "weekend",                  "Whether the session occurred on a weekend (logical)",
+  "revenue",                  "Target: whether the session ended in a purchase (TRUE/FALSE)"
+) %>%
+  knitr::kable(caption = "Online Shoppers: Variables Overview")
 ```
 
-## Data Structure
+Let's examine the outcome: We see that about 15.5% of sessions ended in a purchase. This suggests a class imbalance that we may need to address in modeling. We will learn how to handle class imbalance in future classes.
 
-```{r}
-# View data structure
-str(shoppers)
+```{r classprevalence}
+data %>%
+  count(revenue) %>%
+  mutate(percent = round(n / sum(n) * 100, 1)) %>%
+  knitr::kable(caption = "Distribution of outcome (revenue)")
 ```
 
-## Summary Statistics
+And let's examine all the columns so that we understand what features are available to predict our outcome.
 
-```{r}
-# Basic summary statistics
-summary(shoppers)
+```{r data_glimpse_and_summary}
+data %>%
+  glimpse()
+
+data %>%
+  skimr::skim()
 ```
 
-```{r}
-# Detailed summary using skimr
-skim(shoppers)
-```
+We see that this dataset includes a mix of numeric and categorical predictors. Several categorical variables (operating_systems, browser, region, traffic_type) are integer-coded but represent categories, not quantities. We will learn in class how you can extract more predictive information from the raw variables. This is referred to as "feature engineering."
 
-## Missing Values
+## Summary and tips
 
-```{r}
-# Check for missing values
-missing_counts <- colSums(is.na(shoppers))
-cat("Total missing values:", sum(missing_counts), "\n\n")
+When deciding whether to select this dataset for your project, consider the following:
 
-# Show missing values by column (if any)
-if (sum(missing_counts) > 0) {
-  print(missing_counts[missing_counts > 0])
-} else {
-  cat("No missing values in the dataset.")
-}
-```
+-   **Prediction Goal**: The target variable is selected for you -- whether the session ended in a purchase (revenue = TRUE or FALSE). Consider what business or practical question you want to answer with this prediction.
 
-## Target Variable Distribution
+-   **Scoping *Who* to Make Predictions For**: Each row represents a single browsing session, not a unique customer. You will want to think about whether your prediction task is about predicting purchase behavior for a session as it unfolds or identifying session characteristics that tend to lead to purchases.
 
-```{r}
-# Distribution of Revenue (purchase vs. no purchase)
-shoppers %>%
-  count(Revenue) %>%
-  mutate(percentage = n / sum(n) * 100)
-```
+-   **Class Imbalance**: The outcome variable is imbalanced, with only about 15.5% of sessions ending in a purchase. We will discuss strategies for handling class imbalance in modeling.
 
-```{r}
-# Visualize target variable
-ggplot(shoppers, aes(x = factor(Revenue), fill = factor(Revenue))) +
-  geom_bar() +
-  scale_fill_manual(values = c("FALSE" = "steelblue", "TRUE" = "coral"),
-                    labels = c("No Purchase", "Purchase")) +
-  labs(title = "Distribution of Purchase Outcome",
-       x = "Revenue (Purchase Made)",
-       y = "Count",
-       fill = "Outcome") +
-  scale_x_discrete(labels = c("No Purchase", "Purchase")) +
-  theme_minimal()
-```
+-   **Feature Engineering**: There are good opportunities for creative feature engineering. For example, you could create ratios (e.g., product-related pages as a proportion of total pages), combine page count and duration variables, or explore interactions between visitor type and browsing behavior. The integer-coded categorical variables (operating_systems, browser, region, traffic_type) will need to be treated as categories rather than numeric values. We will discuss feature engineering techniques in class.
 
-## Page Visit Variables
+-   **Missing Data**: This dataset is clean and does not have missing data.
 
-The dataset tracks three types of pages visited: Administrative, Informational, and Product Related. For each type, we have the number of pages visited and total time spent (duration).
-
-```{r}
-# Summary of page visit counts
-shoppers %>%
-  select(Administrative, Informational, ProductRelated) %>%
-  pivot_longer(everything(), names_to = "Page_Type", values_to = "Count") %>%
-  ggplot(aes(x = Page_Type, y = Count, fill = Page_Type)) +
-  geom_boxplot() +
-  scale_fill_brewer(palette = "Set2") +
-  labs(title = "Distribution of Page Visits by Type",
-       x = "Page Type",
-       y = "Number of Pages Visited") +
-  theme_minimal() +
-  theme(legend.position = "none") +
-  coord_cartesian(ylim = c(0, 50))
-```
-
-```{r}
-# Summary of page durations
-shoppers %>%
-  select(Administrative_Duration, Informational_Duration, ProductRelated_Duration) %>%
-  pivot_longer(everything(), names_to = "Page_Type", values_to = "Duration") %>%
-  mutate(Page_Type = str_remove(Page_Type, "_Duration")) %>%
-  ggplot(aes(x = Page_Type, y = Duration, fill = Page_Type)) +
-  geom_boxplot() +
-  scale_fill_brewer(palette = "Set2") +
-  labs(title = "Distribution of Time Spent by Page Type",
-       x = "Page Type",
-       y = "Duration (seconds)") +
-  theme_minimal() +
-  theme(legend.position = "none") +
-  coord_cartesian(ylim = c(0, 500))
-```
-
-## Bounce and Exit Rates
-
-```{r}
-# Bounce rates and exit rates by purchase outcome
-shoppers %>%
-  select(BounceRates, ExitRates, Revenue) %>%
-  pivot_longer(c(BounceRates, ExitRates), names_to = "Metric", values_to = "Rate") %>%
-  ggplot(aes(x = factor(Revenue), y = Rate, fill = factor(Revenue))) +
-  geom_boxplot() +
-  facet_wrap(~Metric) +
-  scale_fill_manual(values = c("FALSE" = "steelblue", "TRUE" = "coral"),
-                    labels = c("No Purchase", "Purchase")) +
-  labs(title = "Bounce and Exit Rates by Purchase Outcome",
-       x = "Revenue",
-       y = "Rate",
-       fill = "Outcome") +
-  scale_x_discrete(labels = c("No", "Yes")) +
-  theme_minimal()
-```
-
-## Page Values
-
-```{r}
-# Distribution of PageValues by purchase outcome
-ggplot(shoppers, aes(x = PageValues, fill = factor(Revenue))) +
-  geom_histogram(binwidth = 5, position = "stack", color = "white") +
-  scale_fill_manual(values = c("FALSE" = "steelblue", "TRUE" = "coral"),
-                    labels = c("No Purchase", "Purchase")) +
-  labs(title = "Distribution of Page Values",
-       x = "Page Values",
-       y = "Count",
-       fill = "Outcome") +
-  theme_minimal() +
-  coord_cartesian(xlim = c(0, 100))
-```
-
-## Visitor Type
-
-```{r}
-# Sessions by visitor type
-shoppers %>%
-  count(VisitorType) %>%
-  mutate(percentage = round(n / sum(n) * 100, 1)) %>%
-  ggplot(aes(x = reorder(VisitorType, -n), y = n, fill = VisitorType)) +
-  geom_bar(stat = "identity") +
-  scale_fill_brewer(palette = "Set2") +
-  labs(title = "Sessions by Visitor Type",
-       x = "Visitor Type",
-       y = "Count") +
-  theme_minimal() +
-  theme(legend.position = "none")
-```
-
-```{r}
-# Purchase rate by visitor type
-shoppers %>%
-  group_by(VisitorType) %>%
-  summarise(purchase_rate = mean(Revenue == TRUE) * 100,
-            count = n()) %>%
-  ggplot(aes(x = reorder(VisitorType, -purchase_rate), y = purchase_rate, fill = VisitorType)) +
-  geom_bar(stat = "identity") +
-  scale_fill_brewer(palette = "Set2") +
-  labs(title = "Purchase Rate by Visitor Type",
-       x = "Visitor Type",
-       y = "Purchase Rate (%)") +
-  theme_minimal() +
-  theme(legend.position = "none")
-```
-
-## Monthly Patterns
-
-```{r}
-# Order months chronologically
-month_order <- c("Feb", "Mar", "May", "June", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-
-shoppers %>%
-  mutate(Month = factor(Month, levels = month_order)) %>%
-  group_by(Month) %>%
-  summarise(sessions = n(),
-            purchase_rate = mean(Revenue == TRUE) * 100) %>%
-  ggplot(aes(x = Month)) +
-  geom_bar(aes(y = sessions), stat = "identity", fill = "steelblue", alpha = 0.7) +
-  geom_line(aes(y = purchase_rate * max(shoppers %>% count(Month) %>% pull(n)) / 100, group = 1),
-            color = "coral", linewidth = 1.2) +
-  geom_point(aes(y = purchase_rate * max(shoppers %>% count(Month) %>% pull(n)) / 100),
-             color = "coral", size = 3) +
-  scale_y_continuous(
-    name = "Number of Sessions",
-    sec.axis = sec_axis(~ . / max(shoppers %>% count(Month) %>% pull(n)) * 100,
-                        name = "Purchase Rate (%)")
-  ) +
-  labs(title = "Sessions and Purchase Rate by Month",
-       x = "Month") +
-  theme_minimal()
-```
-
-## Weekend vs. Weekday
-
-```{r}
-# Purchase rate: weekend vs. weekday
-shoppers %>%
-  group_by(Weekend) %>%
-  summarise(purchase_rate = mean(Revenue == TRUE) * 100,
-            count = n()) %>%
-  ggplot(aes(x = factor(Weekend, labels = c("Weekday", "Weekend")),
-             y = purchase_rate, fill = factor(Weekend))) +
-  geom_bar(stat = "identity") +
-  scale_fill_manual(values = c("FALSE" = "steelblue", "TRUE" = "coral")) +
-  labs(title = "Purchase Rate: Weekend vs. Weekday",
-       x = "",
-       y = "Purchase Rate (%)") +
-  theme_minimal() +
-  theme(legend.position = "none")
-```
-
-## Correlation Analysis
-
-```{r fig.width=10, fig.height=10}
-# Select numeric columns for correlation
-numeric_shoppers <- shoppers %>%
-  mutate(Revenue = as.numeric(Revenue),
-         Weekend = as.numeric(Weekend)) %>%
-  select(where(is.numeric))
-
-# Compute correlation matrix
-cor_matrix <- cor(numeric_shoppers, use = "complete.obs")
-
-# Visualize correlation matrix
-corrplot(cor_matrix, method = "color", type = "upper",
-         tl.cex = 0.7, tl.col = "black",
-         title = "Correlation Matrix",
-         mar = c(0, 0, 2, 0))
-```
-
-```{r}
-# Correlations with Revenue
-revenue_cors <- cor_matrix[, "Revenue"] %>%
-  sort(decreasing = TRUE)
-
-cat("Correlations with Revenue:\n")
-print(round(revenue_cors, 3))
-```
-
-## Key Relationships
-
-```{r}
-# Product Related Duration by purchase outcome
-ggplot(shoppers, aes(x = factor(Revenue), y = ProductRelated_Duration, fill = factor(Revenue))) +
-  geom_boxplot() +
-  scale_fill_manual(values = c("FALSE" = "steelblue", "TRUE" = "coral"),
-                    labels = c("No Purchase", "Purchase")) +
-  labs(title = "Product Related Duration by Purchase Outcome",
-       x = "Revenue",
-       y = "Duration (seconds)",
-       fill = "Outcome") +
-  scale_x_discrete(labels = c("No Purchase", "Purchase")) +
-  theme_minimal() +
-  coord_cartesian(ylim = c(0, 5000))
-```
-
-```{r}
-# Exit Rates vs. Page Values colored by Revenue
-ggplot(shoppers, aes(x = ExitRates, y = PageValues, color = factor(Revenue))) +
-  geom_point(alpha = 0.3, size = 1) +
-  scale_color_manual(values = c("FALSE" = "steelblue", "TRUE" = "coral"),
-                     labels = c("No Purchase", "Purchase")) +
-  labs(title = "Exit Rates vs. Page Values",
-       x = "Exit Rate",
-       y = "Page Values",
-       color = "Outcome") +
-  theme_minimal()
-```
+-   **Google Analytics Metrics**: The bounce rate, exit rate, and page value variables come from Google Analytics. Understanding what these metrics mean in a web analytics context may help with interpretation and feature engineering.

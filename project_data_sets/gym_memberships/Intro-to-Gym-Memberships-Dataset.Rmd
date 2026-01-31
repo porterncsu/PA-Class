@@ -1,0 +1,97 @@
+---
+title: "Gym Memberships Dataset"
+output:
+  html_document:
+  pdf_document:
+  html_notebook: default
+---
+
+The Gym Memberships dataset contains information about members of a gym. Each row represents one member, with demographic details (such as age and gender), membership information (such as membership type, join date, and last visit date), and workout behavior (such as average workout duration, calories burned, weight lifted, visits per month, and favorite exercise). The binary outcome variable `Churn` indicates whether the member has left the gym. If Churn = "Yes", the member churned. If Churn = "No", the member is still active.
+
+This dataset is available on Kaggle: <https://www.kaggle.com/datasets/mkechinov/gym-memberships-dataset>.
+
+```{r setup, message=FALSE, warning=FALSE, echo=FALSE}
+knitr::opts_chunk$set(include = TRUE, echo = FALSE, warning = FALSE, message = FALSE, comment = NA)
+# Packages used in this notebook
+pkgs <- c("tidyverse", "skimr", "janitor", "gtsummary", "readr", "stringr", "purrr")
+to_install <- pkgs[!pkgs %in% rownames(installed.packages())]
+if (length(to_install)) install.packages(to_install, quiet = TRUE)
+invisible(lapply(pkgs, library, character.only = TRUE))
+
+theme_set(theme_minimal(base_size = 13))
+```
+
+Let's start by looking at the dimensions of the dataset.
+
+```{r read-data}
+# import .csv file
+data <- read_csv("project_data_sets/gym_memberships/gym_members_dataset.csv") %>%
+  janitor::clean_names()
+
+# print dimensions
+tibble(
+  rows = nrow(data),
+  columns = ncol(data)
+)
+```
+
+Let's take a look at the columns. Here I have inserted some descriptions from the documentation.
+
+```{r}
+tribble(
+  ~variable,                   ~description,
+  "member_id",                 "Unique member identifier (numeric)",
+  "name",                      "Member name (character)",
+  "age",                       "Age of the member (numeric)",
+  "gender",                    "Gender (Male/Female)",
+  "address",                   "Address of the member (character)",
+  "phone_number",              "Phone number of the member (character)",
+  "membership_type",           "Type of membership (Monthly/Quarterly/Annual)",
+  "join_date",                 "Date the member joined the gym",
+  "last_visit_date",           "Date of the member's most recent visit",
+  "favorite_exercise",         "Member's preferred exercise (categorical)",
+  "avg_workout_duration_min",  "Average workout duration in minutes (numeric)",
+  "avg_calories_burned",       "Average calories burned per workout (numeric)",
+  "total_weight_lifted_kg",    "Total weight lifted in kilograms (numeric)",
+  "visits_per_month",          "Average number of visits per month (numeric)",
+  "churn",                     "Target: whether the member churned (Yes/No)"
+) %>%
+  knitr::kable(caption = "Gym Memberships: Variables Overview")
+```
+
+Let's examine the outcome: We see that about 26% of members churned. This is a moderate class imbalance that we may need to consider in modeling.
+
+```{r classprevalence}
+data %>%
+  count(churn) %>%
+  mutate(percent = round(n / sum(n) * 100, 1)) %>%
+  knitr::kable(caption = "Distribution of outcome (churn)")
+```
+
+And let's examine all the columns so that we understand what features are available to predict our outcome.
+
+```{r data_glimpse_and_summary}
+data %>%
+  glimpse()
+
+data %>%
+  skimr::skim()
+```
+
+We see that this dataset includes a mix of numeric and categorical predictors covering member demographics, membership details, and workout behavior. We will learn in class how you can extract more predictive information from the raw variables. This is referred to as "feature engineering."
+
+## Summary and tips
+
+When deciding whether to select this dataset for your project, consider the following:
+
+-   **Prediction Goal**: The target variable is selected for you -- whether the member churned (churn = "Yes" or "No"). Consider what business or practical question you want to answer with this prediction.
+
+-   **Small Sample Size**: This dataset has only 150 observations, which is quite small. This limits the complexity of models you can build and may make it harder to detect meaningful patterns. You will need to be cautious about overfitting.
+
+-   **Class Imbalance**: The outcome variable has moderate imbalance, with about 26% of members churning. We will discuss strategies for handling class imbalance in modeling.
+
+-   **Feature Engineering**: There are opportunities for creative feature engineering. For example, you could compute the time between join date and last visit date, create indicators from membership type, or derive ratios from the workout variables. The date variables (join_date, last_visit_date) will need to be converted to date format and transformed into numeric features. We will discuss feature engineering techniques in class.
+
+-   **Missing Data**: This dataset has some missing values that will need to be addressed. We will discuss strategies for handling missing data in class.
+
+-   **PII Variables**: The dataset includes personally identifiable information (name, address, phone number) that should not be used as predictors. These should be excluded from modeling.

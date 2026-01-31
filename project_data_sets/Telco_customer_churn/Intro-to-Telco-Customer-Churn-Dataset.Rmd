@@ -1,0 +1,115 @@
+---
+title: "Telco Customer Churn Dataset"
+output:
+  html_document:
+  pdf_document:
+  html_notebook: default
+---
+
+The Telco Customer Churn dataset contains information about customers of a telecommunications company in California. Each row represents one customer, with demographic details (such as gender, senior citizen status, partner, and dependents), account information (such as tenure, contract type, payment method, and charges), and service usage details (such as phone, internet, and streaming services). The binary outcome variable indicates whether the customer churned -- i.e., left the company. If Churn Label = "Yes", the customer left the company. If Churn Label = "No", the customer stayed.
+
+This dataset is from the IBM Cognos Analytics sample datasets and is available on Kaggle: <https://www.kaggle.com/datasets/blastchar/telco-customer-churn>.
+
+```{r setup, message=FALSE, warning=FALSE, echo=FALSE}
+knitr::opts_chunk$set(include = TRUE, echo = FALSE, warning = FALSE, message = FALSE, comment = NA)
+# Packages used in this notebook
+pkgs <- c("tidyverse", "skimr", "janitor", "gtsummary", "readxl", "stringr", "purrr")
+to_install <- pkgs[!pkgs %in% rownames(installed.packages())]
+if (length(to_install)) install.packages(to_install, quiet = TRUE)
+invisible(lapply(pkgs, library, character.only = TRUE))
+
+theme_set(theme_minimal(base_size = 13))
+```
+
+Let's start by looking at the dimensions of the dataset.
+
+```{r read-data}
+# import .xlsx file
+data <- read_excel("project_data_sets/Telco_customer_churn/Telco_customer_churn.xlsx") %>%
+  janitor::clean_names()
+
+# print dimensions
+tibble(
+  rows = nrow(data),
+  columns = ncol(data)
+)
+```
+
+Let's take a look at the columns. Here I have inserted some descriptions from the documentation.
+
+```{r}
+tribble(
+  ~variable,            ~description,
+  "customer_id",        "Unique customer identifier",
+  "count",              "Count value (always 1, used for aggregation)",
+  "country",            "Country of residence (United States)",
+  "state",              "State of residence (California)",
+  "city",               "City of residence",
+  "zip_code",           "Zip code",
+  "lat_long",           "Latitude and longitude (combined string)",
+  "latitude",           "Latitude",
+  "longitude",          "Longitude",
+  "gender",             "Gender (Male/Female)",
+  "senior_citizen",     "Whether the customer is a senior citizen (Yes/No)",
+  "partner",            "Whether the customer has a partner (Yes/No)",
+  "dependents",         "Whether the customer has dependents (Yes/No)",
+  "tenure_months",      "Number of months the customer has been with the company",
+  "phone_service",      "Whether the customer has phone service (Yes/No)",
+  "multiple_lines",     "Whether the customer has multiple lines (Yes/No/No phone service)",
+  "internet_service",   "Type of internet service (DSL/Fiber optic/No)",
+  "online_security",    "Whether the customer has online security (Yes/No/No internet service)",
+  "online_backup",      "Whether the customer has online backup (Yes/No/No internet service)",
+  "device_protection",  "Whether the customer has device protection (Yes/No/No internet service)",
+  "tech_support",       "Whether the customer has tech support (Yes/No/No internet service)",
+  "streaming_tv",       "Whether the customer streams TV (Yes/No/No internet service)",
+  "streaming_movies",   "Whether the customer streams movies (Yes/No/No internet service)",
+  "contract",           "Contract type (Month-to-month/One year/Two year)",
+  "paperless_billing",  "Whether the customer uses paperless billing (Yes/No)",
+  "payment_method",     "Payment method (Electronic check/Mailed check/Bank transfer/Credit card)",
+  "monthly_charges",    "Monthly charge amount (numeric)",
+  "total_charges",      "Total charges over tenure (numeric)",
+  "churn_label",        "Target: whether the customer churned (Yes/No)",
+  "churn_value",        "Churn as numeric (1 = Yes, 0 = No)",
+  "churn_score",        "Predicted churn risk score (0-100)",
+  "cltv",               "Customer lifetime value",
+  "churn_reason",       "Stated reason for churning (if applicable)"
+) %>%
+  knitr::kable(caption = "Telco Customer Churn: Variables Overview")
+```
+
+Let's examine the outcome: We see that about 26.5% of customers churned. This is a moderate class imbalance that we may need to consider in modeling.
+
+```{r classprevalence}
+data %>%
+  count(churn_label) %>%
+  mutate(percent = round(n / sum(n) * 100, 1)) %>%
+  knitr::kable(caption = "Distribution of outcome (churn_label)")
+```
+
+And let's examine all the columns so that we understand what features are available to predict our outcome.
+
+```{r data_glimpse_and_summary}
+data %>%
+  glimpse()
+
+data %>%
+  skimr::skim()
+```
+
+We see that this dataset includes a mix of numeric and categorical predictors covering customer demographics, service subscriptions, and account details. We will learn in class how you can extract more predictive information from the raw variables. This is referred to as "feature engineering."
+
+## Summary and tips
+
+When deciding whether to select this dataset for your project, consider the following:
+
+-   **Prediction Goal**: The target variable is selected for you -- whether the customer churned (churn_label = "Yes" or "No"). Consider what business or practical question you want to answer with this prediction. Note that the dataset also includes churn_score and churn_reason, which you should *not* use as predictors since they are derived from or related to the outcome.
+
+-   **Scoping *Who* to Make Predictions For**: Each row represents one customer at a snapshot in time. You will want to think about whether you are predicting churn for current customers going forward, and what information would realistically be available at the time of prediction.
+
+-   **Class Imbalance**: The outcome variable has moderate imbalance, with about 26.5% of customers churning. We will discuss strategies for handling class imbalance in modeling.
+
+-   **Feature Engineering**: There are several opportunities for creative feature engineering. For example, you could explore interactions between services (e.g., customers with fiber optic internet but no tech support), create categories from tenure, or examine charge-related ratios. Many categorical variables may benefit from encoding techniques. We will discuss feature engineering techniques in class.
+
+-   **Missing Data**: This dataset has some missing values that will need to be addressed. We will discuss strategies for handling missing data in class.
+
+-   **Location Variables**: The dataset includes geographic variables (city, zip code, latitude, longitude). These could be interesting for analysis but consider whether they would be practical predictors in a real-world scenario.
