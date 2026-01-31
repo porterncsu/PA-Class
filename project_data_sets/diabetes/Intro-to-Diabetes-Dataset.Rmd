@@ -1,0 +1,168 @@
+---
+title: "Diabetes Health Indicators (BRFSS 2015)"
+output: html_document
+params:
+  # Point this to the folder that contains the CSV, e.g.,
+  # ~/Documents/PAforImprovingServices/diabetes_health_indicators/
+  data_path: ~/Documents/DSA495PA/diabetes/
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+The Diabetes Health Indicators dataset is derived from CDC’s Behavioral Risk Factor Surveillance System (BRFSS)—a large telephone survey on adult health behaviors and conditions.
+Each row is a respondent with demographics, health status, and lifestyle indicators (e.g., BMI, smoking, physical activity).
+The prediction target is diabetes status (`Diabetes_binary`: 0 = no, 1 = pre-diabetes/diabetes).
+
+This dataset is from Kaggle: <https://www.kaggle.com/datasets/henriqueyamahata/diabetes-health-indicators-dataset>.
+The original source is the CDC BRFSS: <https://www.cdc.gov/brfss/annual_data/annual_2015.html>.
+
+There are two versions of the data.
+One is imbalanced, with about 14% positive cases, and the other is a balanced subset with equal numbers of positive and negative cases.
+You can use either one, but be aware of the class imbalance in the full dataset (about 86% negative, 14% positive).
+The imbalanced version is very large so I have created a smaller sample of 70,000 rows (similar to the size of the balanced dataset) to make it easier to work with.
+
+When using this data, survey respondent's answered questions about their health and lifestyle at the same time as answering questions about their diabetes diagnosis.
+Therefore the data are cross-sectional.
+For predictive analytics in a real-world setting, you would want to ensure that the features you use are available **before** the diabetes diagnosis occurs.
+We will *pretend* our data is longitudinal - that we diabetes information was available later in time.
+We are therefore build a model to identify people with pre-diabetes or diabetes, to help target outreach for preventive care or disease management.
+
+```{r setup, message=FALSE, warning=FALSE, echo=FALSE}
+knitr::opts_chunk$set(include = TRUE, echo = FALSE, warning = FALSE, message = FALSE, comment = NA)
+
+# Packages used in this notebook
+pkgs <- c("tidyverse", "skimr", "janitor", "gtsummary", "lubridate", "readr", "stringr", "purrr", "knitr")
+to_install <- pkgs[!pkgs %in% rownames(installed.packages())]
+if (length(to_install)) install.packages(to_install, quiet = TRUE)
+invisible(lapply(pkgs, library, character.only = TRUE))
+
+theme_set(theme_minimal(base_size = 13))
+```
+
+There are two versions of the data.
+\* `diabetes_binary_health_indicators_BRFSS2015.csv` \* `diabetes_binary_5050split_health_indicators_BRFSS2015.csv`
+
+The second one is a balanced subset with equal numbers of positive and negative cases, and is smaller.
+You can use either one, but be aware of the class imbalance in the full dataset (about 86% negative, 14% positive).
+
+Let's look at the dimensions of these data sets.
+
+```{r read-data, echo=FALSE, message=FALSE, warning=FALSE}
+# Build file path(s) from params
+root <- path.expand(params$data_path)
+candidates <- c("diabetes_binary_5050split_health_indicators_BRFSS2015.csv",
+                "diabetes_binary_health_indicators_BRFSS2015_sample70000.csv")
+
+# data_ib <- readr::read_csv(paste0(params$data_path, candidates[2]), show_col_types = FALSE) %>%
+#   janitor::clean_names()
+data_ib <- readr::read_csv(paste0(params$data_path, candidates[2]), show_col_types = FALSE) %>%
+  janitor::clean_names()
+
+# ss <- sample(1:nrow(data_ib), size = 70000)
+# data_ib <- data_ib[ss, ]
+# write_csv(data_ib, paste0(params$data_path, "diabetes_binary_health_indicators_BRFSS2015_sample70000.csv"))
+
+data_ba <- readr::read_csv(paste0(params$data_path, candidates[1]), show_col_types = FALSE) %>%
+  janitor::clean_names()
+
+# print dimensions
+tibble(
+  rows = nrow(data_ba),
+  columns = ncol(data_ba)
+) %>% knitr::kable(caption = "Dimensions of Balanced Subset (diabetes_binary_5050split_health_indicators_BRFSS2015.csv)")
+
+# print dimensions
+tibble(
+  rows = nrow(data_ib),
+  columns = ncol(data_ib)
+) %>% knitr::kable(caption = "Dimensions of Raw, Imbalanced Subset (diabetes_binary_health_indicators_BRFSS2015.csv)")
+```
+
+Let’s take a look at the columns, which are identical in both versions of the data.
+(Descriptions are adapted from BRFSS variable notes.)
+
+```{r variables-overview}
+tribble(
+  ~variable,                 ~description,
+  "diabetes_binary",         "Binary diabetes status: 0 = no, 1 = pre-diabetes or diabetes (alternative target)",
+  "high_bp",                 "High blood pressure (Yes/No)",
+  "high_chol",               "High cholesterol (Yes/No)",
+  "chol_check",              "Cholesterol check in past 5 years (Yes/No)",
+  "bmi",                     "Body Mass Index (numeric)",
+  "smoker",                  "Smoked at least 100 cigarettes in lifetime (Yes/No)",
+  "stroke",                  "Ever had a stroke (Yes/No)",
+  "heart_diseaseor_attack",  "Coronary heart disease or heart attack (Yes/No)",
+  "phys_activity",           "Any physical activity in past 30 days (not job) (Yes/No)",
+  "fruits",                  "Consumes fruit ≥1 time/day (Yes/No)",
+  "veggies",                 "Consumes vegetables ≥1 time/day (Yes/No)",
+  "hvy_alcohol_consump",     "Heavy alcohol consumption (Yes/No)",
+  "any_healthcare",          "Has any health care coverage (Yes/No)",
+  "no_docbc_cost",           "Could not see doctor because of cost (Yes/No)",
+  "gen_hlth",                "Self-rated general health (1=Excellent ... 5=Poor)",
+  "ment_hlth",               "Days of poor mental health in past 30 (0–30)",
+  "phys_hlth",               "Days of poor physical health in past 30 (0–30)",
+  "diff_walk",               "Serious difficulty walking/climbing stairs (Yes/No)",
+  "sex",                     "Sex (coded 0/1 in this file; see codebook)",
+  "age",                     "Age category (1=18-24, 2=25-29, ..., 13=80+)",
+  "education",               "Education level (1=Never attended school ... 6=College graduate)",
+  "income",                  "Income level (1=<10K, 2=10-15K, ..., 8=≥75K)") %>%
+  knitr::kable(caption = "Diabetes Health Indicators: Variables Overview")
+```
+
+Let's examine the outcome.
+We see that about 14% of respondents have pre-diabetes or diabetes in the imbalanced version, and 50% in the balanced version.
+
+```{r class-prevalence}
+  data_ib %>%
+    count(diabetes_binary, name = "n") %>%
+    mutate(
+      percent = round(n / sum(n) * 100, 1),
+      Class = if_else(diabetes_binary == 1, "Prediabetes/Diabetes", "No Diabetes")
+    ) %>%
+    select(Class, n, percent) %>%
+    knitr::kable(caption = "Distribution of outcome (diabetes_binary) in Imbalanced Data")
+
+  data_ba %>%
+    count(diabetes_binary, name = "n") %>%
+    mutate(
+      percent = round(n / sum(n) * 100, 1),
+      Class = if_else(diabetes_binary == 1, "Prediabetes/Diabetes", "No Diabetes")
+    ) %>%
+    select(Class, n, percent) %>%
+    knitr::kable(caption = "Distribution of outcome (diabetes_binary) in Balanced Data")
+
+```
+
+And let's examine all the columns so that we understand what features are available to predict diabetes.
+
+```{r data_glimpse_and_summary}
+cat("glimpse of imbalanced data:\n")
+glimpse(data_ib)
+cat("glimpse of balanced data:\n")
+glimpse(data_ba)
+
+cat("skim of imbalanced data:\n")
+skimr::skim(data_ib)
+
+cat("skim of balanced data:\n")
+skimr::skim(data_ba)
+
+```
+
+## Summary and tips
+
+When deciding whether to select this dataset for your project, consider the following:
+
+-   **Prediction Goal**: The target variable is selected for you - whether the respondent has pre-diabetes or diabetes (diabetes_binary = 1) or not (diabetes_binary = 0).
+
+-   **Class Imbalance**: The imbalanced version of the data has about 14% positive cases.
+    You will need to address this class imbalance in your modeling.
+    The balanced version has 50/50 cases, but is smaller and may not be representative of the population.
+    You can use either version, but be aware of the trade-offs.
+
+-   **Feature Engineering**: There may be fewer opportunities for creative feature engineering (extracting predictive information from raw variables) than other datasets, but many key features are included.
+    There are many categorical variables that may benefit from encoding techniques and numeric variables that may benefit from transformations.
+    We will discuss feature engineering techniques in class.
+
+-   **Missing Data**: This dataset is pretty clean and does not have missing data.
