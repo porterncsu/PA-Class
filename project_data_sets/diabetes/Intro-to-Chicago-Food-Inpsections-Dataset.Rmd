@@ -1,0 +1,198 @@
+---
+title: "Chicago Food Inspections Dataset"
+output:
+  html_document:
+    # toc: true
+    # toc_depth: 2
+    # number_sections: false
+  pdf_document:
+    toc: true
+    toc_depth: '2'
+  html_notebook: default
+params:
+  data_path: ~/Documents/DSA495PA/restaurant inspections/
+---
+
+The Chicago Food Inspections dataset contains information about food establishment inspections conducted by the Chicago Department of Public Health's Food Protection Program from January 1, 2010 through 2019. Each row represents one inspection of a food establishment, including restaurants, grocery stores, and other food-related facilities. The dataset includes information about the establishment (name, type, location), inspection details (date, type, inspector findings), risk assessment, violations found, and the final inspection result. The primary outcome variable indicates whether the establishment passed, passed with conditions, or failed the inspection - crucial information for public health monitoring and predictive modeling to prioritize future inspections.
+
+This dataset comes from the City of Chicago's Open Data Portal and is also available on Kaggle: https://www.kaggle.com/datasets/chicago/chicago-food-inspections. The original source is: https://data.cityofchicago.org/Health-Human-Services/Food-Inspections/4ijn-s7e5.
+
+To make the data more manageable, I have created a 3-year sample (2010-2012) of the original data, which contains about 45,000 rows. Below, we look at the number of rows in this filtered sample and the number of rows (inspections) by year.
+
+```{r setup, message=FALSE, warning=FALSE, echo=FALSE}
+knitr::opts_chunk$set(include = TRUE, echo = FALSE, warning = FALSE, message = FALSE, comment = NA)
+# Packages used in this notebook
+pkgs <- c("tidyverse", "skimr", "janitor", "gtsummary", "lubridate", "readr", "stringr", "purrr")
+to_install <- pkgs[!pkgs %in% rownames(installed.packages())]
+if (length(to_install)) install.packages(to_install, quiet = TRUE)
+invisible(lapply(pkgs, library, character.only = TRUE))
+
+theme_set(theme_minimal(base_size = 13))
+```
+
+Let's start by looking at the dimensions of the dataset, create date variables, then take a sample for analysis.
+```{r read-data}
+# import .csv file 
+# data_path <- path.expand(paste0(params$data_path,"food-inspections.csv"))
+data_path <- path.expand(paste0(params$data_path,"food-inspections-sample-10K.csv"))
+# full_data <- read.csv(data_path) %>% janitor::clean_names()
+data <- read.csv(data_path) %>% janitor::clean_names()
+
+# print original dimensions
+# cat("Original dataset dimensions:\n")
+# tibble(
+#   rows = nrow(full_data),
+#   columns = ncol(full_data)
+# ) %>% print()
+
+# Create date variables early for potential filtering
+# Date format is ISO 8601: "2019-12-04T00:00:00.000"
+# full_data <- full_data %>%
+#   mutate(
+#     inspection_date = ymd_hms(inspection_date),  # Parse ISO 8601 format
+#     year = year(inspection_date),
+#     month = month(inspection_date, label = TRUE, abbr = FALSE),
+#     month_num = month(inspection_date),
+#     day = day(inspection_date),
+#     day_of_week = wday(inspection_date, label = TRUE, abbr = FALSE),
+#     quarter = quarter(inspection_date)
+#   )
+# 
+# cat("\nInspections by year:\n")
+# ss <- sample(1:nrow(full_data),10000,replace=FALSE)
+# data <- full_data[ss,]
+# data <- full_data %>%
+#   # filter to 2010, 2011 and 2012
+#   filter(year > 2010 & year <= 2012)
+
+# Save the sampled dataset
+#sample_path <- path.expand(paste0(params$data_path,"food-inspections-sample-3yrs.csv"))
+#sample_path <- path.expand(paste0(params$data_path,"food-inspections-sample-10K.csv"))
+#write.csv(data, sample_path, row.names = FALSE)
+
+# # Remove large dataset from memory
+# rm(full_data)
+# gc()  # garbage collection to free memory
+
+# print filtered dataset dimensions
+tibble(
+  rows = nrow(data),
+  columns = ncol(data)
+) %>% knitr::kable(caption = "Filtered dataset dimensions (2010-2012)")
+
+# print filtered dataset dimensions by year
+data %>%
+  count(year) %>%
+  knitr::kable(caption = "Inspections by Year (2010-2012)")
+```
+
+Let's take a look at the columns. Here I have inserted descriptions based on the Chicago Data Portal documentation.
+
+```{r}
+tribble(
+  ~variable,           ~description,
+  "inspection_id",     "Unique identifier for the inspection",
+  "dba_name",          "Doing business as name - establishment name",
+  "aka_name",          "Also known as name - alternative establishment name",
+  "license_",          "License number assigned to the establishment",
+  "facility_type",     "Type of facility (Restaurant, Grocery Store, etc.)",
+  "risk",              "Risk category (Risk 1 High, Risk 2 Medium, Risk 3 Low)",
+  "address",           "Street address of establishment",
+  "city",              "City (Chicago)",
+  "state",             "State (IL)",
+  "zip",               "ZIP code",
+  "inspection_date",   "Date when inspection was performed",
+  "inspection_type",   "Type of inspection (Canvass, Complaint, License, etc.)",
+  "results",           "Inspection result (Pass, Pass w/ Conditions, Fail, etc.)",
+  "violations",        "Description of violations found during inspection",
+  "latitude",          "Latitude coordinate",
+  "longitude",         "Longitude coordinate",
+  "location",          "Combined latitude/longitude location"
+) %>%
+  knitr::kable(caption = "Chicago Food Inspections: Variables Overview")
+```
+
+Let's examine the inspection results distribution. You will make a binary outcome variable from this information. Let's also look at the inspection results by year, which shows pretty stable trends over time. 
+
+```{r results_distribution}
+# results overall
+data %>%
+  count(results) %>%
+  mutate(percent = round(n/sum(n)*100,1)) %>%
+  arrange(desc(n)) %>%
+  knitr::kable(caption = "Distribution of Inspection Results")
+
+# results by year in wide format
+data %>%
+  filter(year >= 2010 & year <= 2012) %>%
+  count(year, results) %>%
+  group_by(year) %>%
+  mutate(percent = round(n/sum(n)*100,1)) %>%
+  arrange(year, desc(n)) %>%
+  pivot_wider(names_from = results, values_from = c(n, percent), 
+              names_sep = "_", values_fill = 0) %>%
+  knitr::kable(caption = "Inspection Results by Year (2010-2012)")
+```
+
+Now let's look at the facility types to understand what kinds of establishments are being inspected. There are a lot so I'm just showing the top 20. You'll notice this variable has pretty messy responses that will need some cleaning up. This can be a fun challenge, and I can also help. 
+
+```{r facility_types}
+data %>%
+  count(facility_type) %>%
+  mutate(percent = round(n/sum(n)*100,1)) %>%
+  arrange(desc(n)) %>%
+  head(20) %>%
+  knitr::kable(caption = "Facility Types")
+```
+
+The variables include a risk category for each establishment, which represent the health department's assessment of the establishment's risk level. These risk categories are determined based on factors like food handling practices, menu complexity, and population served.. Let's examine the risk categories.
+
+```{r risk_categories}
+data %>%
+  count(risk) %>%
+  mutate(percent = round(n/sum(n)*100,1)) %>%
+  arrange(desc(n)) %>%
+  knitr::kable(caption = "Distribution of Risk Categories")
+```
+
+Let's also look at the types of inspections conducted. This one is also pretty messy, with many different types of inspections. You can decide whether to keep all types or focus on certain types. I'm again just showing the top 20. 
+
+```{r inspection_types}
+data %>%
+  count(inspection_type) %>%
+  mutate(percent = round(n/sum(n)*100,1)) %>%
+  arrange(desc(n)) %>%
+  head(20) %>%
+  knitr::kable(caption = "Inspection Types")
+```
+
+Now let's examine the overall data structure and summary statistics.
+
+```{r data_glimpse_and_summary}
+data %>%
+  glimpse()
+
+data %>%
+  skimr::skim()
+```
+
+Note that the data includes a "violations" column that contains free-text descriptions of violations found during inspections. For example, here are the first few entries in the violations column. This column presents an opportunity (optional) for using LLMs to extract structured predictors from unstructured text.
+
+```{r violations_sample}
+data %>%
+  select(violations) %>%
+  slice_head(n = 5) %>%
+  knitr::kable(caption = "Sample Violations Text")
+```
+
+## Summary and Tips
+
+When deciding whether to select this dataset for your project, consider the following:
+
+**Scoping**: There is some flexibility to specify your own binary outcome as prediction target. Depending on how you define it, your outcome may or may not be imbalanced. You can also decide to restrict you analysis to certain types of establishments (e.g. only restaurants) or risk categories.
+
+**Repeated Establishments & Data Structure**: Chicago has over 15,000 food establishments subject to recurring inspections. Each row represents one inspection, so establishments appear multiple times over years. You can model at the inspection level, but there may be some reshaping or wrangling to do (optionally) if you want to capture information from past inspections. 
+
+**Text Data**: The violations column contains rich free-text information, which may present some fun opportunities to incorporate AI into your workflow - I don't know how successful you will be, but it could be fun to try, and I will provide some tips in class and can help further as well. Some messy text columns mentioned above may also need cleaning up, and again AI can be helpful. 
+
+**Other Considerations**: You will also have the opportunity create temporal features (day of week, season, time since last inspection), engineer location-based features (neighborhood characteristics), and if you are ambitious, you could even try to incorporate external data sources (crime rates, sanitation complaints, weather).
