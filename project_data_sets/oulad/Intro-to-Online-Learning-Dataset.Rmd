@@ -1,0 +1,294 @@
+---
+title: 'Introduction to the Open University Learning Analytics Dataset (OULAD)'
+output:
+  html_document:
+    # toc: true
+    # toc_depth: 2
+    # number_sections: false
+  pdf_document:
+    toc: true
+    toc_depth: '2'
+  html_notebook: default
+params:
+  data_path: ~/Documents/DSA495PA/oulad/oulad_combined_BBB_2013J.rds
+  assess_path: ~/Documents/DSA495PA/oulad/assessments.csv
+---
+
+The **Open University Learning Analytics Dataset (OULAD)** is a large, openly available collection of anonymized student-level records from The Open University (UK). It combines demographic information, assessment data, and Virtual Learning Environment (VLE) activity for specific *module presentations* (a module ≈ course; a presentation ≈ a specific run/term). The original, raw data and the documentation can be found at the [OULAD website](https://analyse.kmi.open.ac.uk/open_dataset).
+
+In this notebook, we look at module **BBB**. Each row corresponds to one student, including their overall **final result** for the course (Pass, Fail, or Withdrawn), basic background variables, their assessment fields, and weekly online activity.
+
+```{r setup, message=FALSE, warning=FALSE, echo=FALSE}
+knitr::opts_chunk$set(include = TRUE, echo = FALSE, warning = FALSE, message = FALSE, comment = NA)
+# Packages used in this notebook
+pkgs <- c("tidyverse", "skimr", "janitor", "gtsummary", "lubridate", "readr", "stringr","purrr")
+to_install <- pkgs[!pkgs %in% rownames(installed.packages())]
+if (length(to_install)) install.packages(to_install, quiet = TRUE)
+invisible(lapply(pkgs, library, character.only = TRUE))
+
+theme_set(theme_minimal(base_size = 13))
+options(dplyr.summarise.inform = FALSE)
+set.seed(123)
+
+# Set options to print all rows and columns
+options(tibble.print_max = Inf)
+options(tibble.width = Inf)
+options(dplyr.print_max = Inf)
+options(dplyr.width = Inf)
+```
+
+Let's start by looking at the dimensions of the dataset.
+
+```{r read-data, echo=FALSE}
+# read in data
+data_path <- path.expand(params$data_path)
+stopifnot(file.exists(data_path))
+df <- readRDS(data_path) %>% janitor::clean_names()
+
+# print dimensions
+# overall
+id_col <- "id_student"
+tibble(
+  rows_in_data = nrow(df),
+  unique_students = if (!is.na(id_col)) dplyr::n_distinct(df[[id_col]]) else nrow(df),
+  columns = ncol(df)
+)
+
+
+# print first 10 rows 
+#df[1:10,1:10]
+```
+
+There are multiple terms in the dataset; there are no repeat students across terms.
+
+```{r high-level}
+
+# by presentation
+df %>%
+  group_by(code_presentation) %>%
+  summarise(
+    rows_in_data = n(),
+    unique_students = if (!is.na(id_col)) dplyr::n_distinct(.data[[id_col]]) else n(),
+    .groups = "drop"
+  )
+```
+
+Below is a summary of the columns in the dataset.
+
+## Outcome overview
+
+First, let's look at the outcome variable, `final_result`. This column indicates whether a student passed, passed with distinction, failed, or withdrew from the course. Let's look at how these different possible outcomes are distributed among the students in this dataset. For your project, you can convert this outcome to a binary outcome (e.g., Pass vs. Fail/Withdrawn or Pass/Pass with Distinction vs. Fail/Withdrawn).
+
+```{r outcome-overview, fig.height=4, echo=FALSE, warning=FALSE, message=FALSE}
+outcome_col <- "final_result"
+if (!is.na(outcome_col) && outcome_col %in% names(df)) {
+  outcome_tbl <- df %>%
+    mutate(outcome = forcats::fct_lump_n(as.factor(.data[[outcome_col]]), n = 10)) %>%
+    count(outcome, name = "n") %>%
+    mutate(pct = n / sum(n))
+
+  ggplot(outcome_tbl, aes(x = reorder(as.character(outcome), n), y = n, label = scales::percent(pct))) +
+    geom_col() +
+    geom_text(hjust = -0.1) +
+    coord_flip() +
+    labs(x = "Final result", y = "Students", title = "Distribution of final outcomes") +
+    expand_limits(y = max(outcome_tbl$n) * 1.1)
+} else {
+  cat("No `final_result` column found.")
+}
+```
+
+## Demographics
+
+Next, let's look at the demographic columns. We see that there are a mix of categorical and numeric variables, and some missing values. The `preview` column gives a quick summary of the unique values in each column (or range for numeric columns).
+
+Note that imd_band is an index of multiple deprivation, where 1 is most deprived and 5 is least deprived.
+
+```{r demographics-data-dictionary, echo=FALSE}
+demo_cols <- c(
+  "gender","region","highest_education","imd_band","age_band",
+  "num_of_prev_attempts","studied_credits","disability","final_result"
+)
+
+present_demo <- intersect(demo_cols, names(df))
+demo_df <- df %>% select(all_of(present_demo))
+
+value_preview <- function(x) {
+  u <- unique(x)
+  u <- u[!is.na(u)]
+  if (is.numeric(x)) {
+    rng <- range(x, na.rm = TRUE)
+    m   <- mean(x, na.rm = TRUE)
+    med <- median(x, na.rm = TRUE)
+    sprintf("num: min=%.2f, med=%.2f, mean=%.2f, max=%.2f", rng[1], med, m, rng[2])
+  } else if (length(u) > 10) {
+    paste0(paste(head(sort(as.character(u)), 5), collapse = ", "), ", …")
+  } else {
+    paste(sort(as.character(u)), collapse = ", ")
+  }
+}
+
+demo_dict <- tibble(
+  variable   = present_demo,
+  type       = map_chr(demo_df, ~ class(.x)[1]),
+  n_missing  = map_int(demo_df, ~ sum(is.na(.x))),
+  preview    = map_chr(demo_df, value_preview)
+)
+
+knitr::kable(demo_dict, caption = "Data dictionary for demographic columns")
+
+```
+
+## Assessment performance
+
+There are two columns that provide students' scores on assessments: "assess_CMA" and "assess_TMA". These correspond to computer-marked assignments (CMA) and tutor-marked assignments (TMA).
+
+```{r assessments-data-dictionary, echo=FALSE, message=FALSE, warning=FALSE}
+assess_path <- path.expand(params$assess_path)
+stopifnot(file.exists(assess_path))
+assessments <- readr::read_csv(assess_path, show_col_types = FALSE)
+
+# Filter assessments to only include those for module BBB
+assessments_bbb <- assessments %>%
+  filter(code_module == "BBB")
+
+assess_cols <- names(df)[str_detect(names(df), "^x\\d+$")]
+if (length(assess_cols) == 0) {
+  stop("No assessment columns found matching '^x\\d+$'.")
+}
+
+assess_map <- tibble(
+  variable = assess_cols,
+  id_assessment = as.integer(str_match(assess_cols, "^x(\\d+)$")[,2])
+)
+
+# Only keep assessment columns that correspond to BBB module assessments
+assess_map_bbb <- assess_map %>%
+  inner_join(assessments_bbb, by = "id_assessment")
+
+assessment_type_lookup <- tribble(
+  ~assessment_type, ~type_description,
+  "TMA",  "Tutor-Marked Assignment (human-marked coursework)",
+  "CMA",  "Computer-Marked Assignment (auto-graded quiz/exercise)",
+  "Exam", "Final examination",
+  "EMA",  "End-of-Module Assessment (final project/assignment)",
+  "Other","Other assessment type"
+)
+
+# Transform the data to have one column per assessment type per presentation
+# First, get the assessment data in long format
+df_assess_long <- df %>%
+  select(id_student, code_presentation, all_of(assess_map_bbb$variable)) %>%
+  pivot_longer(cols = all_of(assess_map_bbb$variable), 
+               names_to = "variable", 
+               values_to = "score") %>%
+  left_join(assess_map_bbb %>% select(variable, id_assessment, assessment_type), 
+            by = "variable") %>%
+  # Group by student, presentation, and assessment type
+  # If there are multiple assessments of the same type, take the mean
+  group_by(id_student, code_presentation, assessment_type) %>%
+  summarise(score = mean(score, na.rm = TRUE), .groups = "drop")
+
+# Convert back to wide format with assessment types as columns
+df_assess_wide <- df_assess_long %>%
+  pivot_wider(names_from = assessment_type, 
+              values_from = score,
+              names_prefix = "assess_") 
+
+# Join back to the original dataframe
+df_with_assess <- df %>%
+  select(-all_of(assess_map_bbb$variable)) %>%
+  left_join(df_assess_wide, by = c("id_student", "code_presentation"))
+
+# Create data dictionary for assessment type columns
+assess_type_cols <- c("assess_CMA", "assess_TMA")
+
+value_preview_num <- function(x) {
+  if (all(is.na(x))) return("all missing")
+  rng <- range(x, na.rm = TRUE)
+  m   <- mean(x, na.rm = TRUE)
+  sprintf("num: min=%.2f, mean=%.2f, max=%.2f", rng[1], m, rng[2])
+}
+
+dict_assess_types <- tibble(
+  variable = assess_type_cols,
+  assessment_type = str_remove(assess_type_cols, "^assess_")
+) %>%
+  left_join(assessment_type_lookup, by = "assessment_type") %>%
+  mutate(
+    type = "numeric",
+    n_total = nrow(df_with_assess),
+    n_missing = map_int(df_with_assess[assess_type_cols], ~ sum(is.na(.x))),
+    pct_missing = round(100 * n_missing / n_total, 1),
+    preview = map_chr(df_with_assess[assess_type_cols], value_preview_num)
+  )
+
+#print("Data dictionary for assessment type columns:")
+knitr::kable(dict_assess_types[,c("variable","type","n_total","n_missing","pct_missing","preview")], caption = "Data dictionary for assessment columns")
+
+```
+
+## VLE (weekly activity) variables
+
+Here, we look at the VLE (Virtual Learning Environment) weekly activity columns. These columns are named `weekN` where `N` is the week number (1 to 24). The values in these columns represent the number of interactions a student had with the online learning platform during that week. We see that there are many missing values, which may indicate weeks where students were not active. We will discuss how to handle such data in future classes.
+
+```{r vle-data-dictionary, message=FALSE, warning=FALSE, echo=FALSE}
+# Define helper functions first
+value_preview <- function(x) {
+  if (is.numeric(x)) {
+    rng <- range(x, na.rm = TRUE); m <- mean(x, na.rm = TRUE); med <- median(x, na.rm = TRUE)
+    sprintf("num: min=%.2f, med=%.2f, mean=%.2f, max=%.2f", rng[1], med, m, rng[2])
+  } else {
+    u <- unique(x); u <- u[!is.na(u)]
+    if (length(u) > 10) paste0(paste(head(sort(as.character(u)), 5), collapse = ", "), ", …")
+    else paste(sort(as.character(u)), collapse = ", ")
+  }
+}
+
+# Now use the functions
+vle_weekly_cols <- names(df)[str_detect(names(df), "^week")]
+if (length(vle_weekly_cols) == 0) stop("No columns found starting with 'week'.")
+vle_weekly_df <- df %>% select(all_of(vle_weekly_cols))
+
+dict_vle_weekly <-
+  tibble(variable = vle_weekly_cols) %>%
+  mutate(
+    type        = map_chr(vle_weekly_df, ~ class(.x)[1]),
+    n_missing   = map_int(vle_weekly_df, ~ sum(is.na(.x))),
+    n           = nrow(df),
+    pct_missing = round(100 * n_missing / n, 1),
+#    preview     = map_chr(vle_weekly_df, value_preview),
+    week        = map_int(variable, ~ {
+      wk <- str_match(tolower(.x), "^week[_\\- ]*(\\d{1,2})")[,2]
+      suppressWarnings(as.integer(wk))
+    }),
+    min   = map_dbl(vle_weekly_df, ~ if (is.numeric(.x)) min(.x, na.rm = TRUE) else NA_real_),
+    mean  = map_dbl(vle_weekly_df, ~ if (is.numeric(.x)) mean(.x, na.rm = TRUE) else NA_real_),
+    median= map_dbl(vle_weekly_df, ~ if (is.numeric(.x)) median(.x, na.rm = TRUE) else NA_real_),
+    max   = map_dbl(vle_weekly_df, ~ if (is.numeric(.x)) max(.x, na.rm = TRUE) else NA_real_)
+  ) %>%
+  arrange(week, variable)
+
+
+knitr::kable(dict_vle_weekly, caption = "Data dictionary for VLE weekly activity columns")
+
+```
+
+```{r save_files, echo=FALSE}
+
+# Save the cleaned dataframe with assessment type columns
+cleaned_data_path <- file.path(dirname(data_path), "oulad_bbb_cleaned.rds")
+saveRDS(df_with_assess, cleaned_data_path)
+```
+
+## Summary and tips
+
+When deciding on whether to select this dataset for your project, consider the following:
+
+-   **Prediction Goal**: You will want to clearly define what you want to predict based on the outcome column (e.g., predicting whether a student will pass or fail).
+
+-   **Taking Advantage of Multiple Terms**: Since the dataset includes multiple terms, consider how you might leverage this for training and testing your models (e.g., training on one term and testing on another).
+
+-   **Feature Engineering**: Feature engineering refers to the process of creating new features or modifying existing ones to improve model performance. This dataset provides some fun challenges for feature engineering, such as creating summary statistics from the weekly VLE activity (e.g., total activity, average activity per week, trends over time).
+
+-   **Handling Missing Data**: As noted above, there are some missing values in the assessment and VLE columns. We will discuss strategies for handling this missingness.
