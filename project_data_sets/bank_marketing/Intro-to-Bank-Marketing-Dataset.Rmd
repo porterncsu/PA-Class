@@ -1,0 +1,100 @@
+---
+title: "Bank Marketing Dataset"
+output:
+  html_document:
+  pdf_document:
+  html_notebook: default
+params:
+  data_path: ~/Documents/DSA495PA/bank marketing/
+---
+
+The Bank Marketing dataset comes from a series of telephone marketing campaigns conducted by a Portuguese bank. Each row represents one contact with a client, along with demographic information (such as age, job, and marital status), financial details (such as average account balance and existing loans), and campaign-related variables (such as how and when the client was contacted, and outcomes of past campaigns). The binary outcome variable is an indicator if whether the client subscribed to a term deposit (also called a time deposit or fixed deposit) - a type of savings product offered by banks. With this product, a customer agrees to deposit a sum of money for a fixed period of time (e.g., 6 months, 1 year, 5 years) and cannot withdraw it without paying a penalty. In exchange, the bank pays a fixed interest rate, usually higher than that of a standard savings account. If y = "yes" → the client agreed to open a term deposit account after being contacted during the marketing campaign. If y = "no" → the client did not agree to open one.
+
+This dataset is from the UCI Machine Learning Repository: <https://archive.ics.uci.edu/ml/datasets/bank+marketing> and the Kaggle page: <https://www.kaggle.com/datasets/henriqueyamahata/bank-marketing>.
+
+```{r setup, message=FALSE, warning=FALSE, echo=FALSE}
+knitr::opts_chunk$set(include = TRUE, echo = FALSE, warning = FALSE, message = FALSE, comment = NA)
+# Packages used in this notebook
+pkgs <- c("tidyverse", "skimr", "janitor", "gtsummary", "lubridate", "readr", "stringr","purrr")
+to_install <- pkgs[!pkgs %in% rownames(installed.packages())]
+if (length(to_install)) install.packages(to_install, quiet = TRUE)
+invisible(lapply(pkgs, library, character.only = TRUE))
+
+theme_set(theme_minimal(base_size = 13))
+```
+
+Let's start by looking at the dimensions of the dataset.
+
+```{r read-data}
+# import .csv file with ; delimiter
+data_path <- path.expand(paste0(params$data_path,"bank-full.csv"))
+data <- read.csv(data_path, sep = ";") %>% janitor::clean_names()
+
+# print dimensions
+tibble(
+  rows = nrow(data),
+  columns = ncol(data)
+)
+```
+
+Let's take a look at the columns. Here I have inserted some descriptions from the documentation.
+
+```{r}
+tribble(
+  ~variable,     ~description,
+  "age",         "Age of client (numeric)",
+  "job",         "Type of job (categorical)",
+  "marital",     "Marital status",
+  "education",   "Education level",
+  "default",     "Has credit in default? (yes/no/unknown)",
+  "balance",     "Average yearly balance (numeric, euros)",
+  "housing",     "Has housing loan? (yes/no/unknown)",
+  "loan",        "Has personal loan? (yes/no/unknown)",
+  "contact",     "Contact communication type",
+  "day",         "Last contact day of the month",
+  "month",       "Last contact month",
+  "duration",    "Last contact duration (seconds)",
+  "campaign",    "Number of contacts performed during this campaign",
+  "pdays",       "Days since previous campaign contact (-1 = never)",
+  "previous",    "Number of contacts before this campaign",
+  "poutcome",    "Outcome of the previous campaign",
+  "y",           "Target: has the client subscribed to a term deposit?"
+) %>%
+  knitr::kable(caption = "Bank Marketing: Variables Overview")
+```
+
+Let's examine the outcome: We see that about 11.7% of clients subscribed to a term deposit. This suggests a class imbalance that we may need to address in modeling. We will learn how to handle class imbalance in future classes.
+
+```{r classprevalence}
+data %>%
+  count(y) %>%
+  mutate(percent = round(n/sum(n)*100,1)) %>%
+  knitr::kable(caption = "Distribution of outcome (y)")
+
+```
+
+And let's examine all the columns so that we understand what features are available to predict our outcome.
+
+```{r data_glimpse_and_summary}
+data %>%
+  glimpse()
+
+data %>%
+  skimr::skim()
+```
+
+We see that this dataset includes a mix of numeric and categorical predictors. We will learn in class how you can extract more predictive information from the raw variables. This is referred to as "feature engineering."
+
+## Summary and tips
+
+When deciding whether to select this dataset for your project, consider the following:
+
+-   **Prediction Goal**: The target variable is selected for you - whether the client subscribed to a term deposit (y = "yes" or "no"). Consider what business or practical question you want to answer with this prediction.
+
+-   **Scoping *Who* to Make Predictions For**: While this dataset is mostly straightforward, you will notice that some people were contacted many times and some only once, and those contacts happened at different points in time. You will need to decide whether your prediction task is about who to call in the first place (before any contact is made) or whether to keep calling someone once the campaign has already started.
+
+-   **Class Imbalance**: The outcome variable is imbalanced, with only about 11.7% of clients subscribing to a term deposit. We will discuss strategies for handling class imbalance in modeling.
+
+-   **Feature Engineering**: There may be fewer opportunities for creative feature engineering (extracting predictive information from raw variables) than other datasets. There are many categorical variables that may benefit from encoding techniques and numeric variables that may benefit from transformations (e.g., log transformation for skewed distributions). We will discuss feature engineering techniques in class.
+
+-   **Missing Data**: This dataset is pretty clean and does not have missing data.
