@@ -1,0 +1,300 @@
+---
+title: "Online Shoppers Purchasing Intention Dataset Summary"
+output:
+  html_notebook: default
+  html_document: default
+---
+
+This notebook provides a summary of the Online Shoppers Purchasing Intention dataset from the UCI Machine Learning Repository. The dataset contains feature vectors for 12,330 online shopping sessions. The target variable `Revenue` indicates whether a session ended in a purchase.
+
+## Load Libraries and Data
+
+```{r message=FALSE, warning=FALSE}
+# Load required libraries
+library(tidyverse)
+library(skimr)
+library(corrplot)
+```
+
+```{r message=FALSE}
+# Load the dataset
+shoppers <- read_csv("project_data_sets/online_shoppers/online_shoppers_intention.csv")
+
+# Display first few rows
+head(shoppers)
+```
+
+## Dataset Dimensions
+
+```{r}
+# Number of observations and variables
+cat("Number of observations:", nrow(shoppers), "\n")
+cat("Number of variables:", ncol(shoppers), "\n")
+```
+
+## Data Structure
+
+```{r}
+# View data structure
+str(shoppers)
+```
+
+## Summary Statistics
+
+```{r}
+# Basic summary statistics
+summary(shoppers)
+```
+
+```{r}
+# Detailed summary using skimr
+skim(shoppers)
+```
+
+## Missing Values
+
+```{r}
+# Check for missing values
+missing_counts <- colSums(is.na(shoppers))
+cat("Total missing values:", sum(missing_counts), "\n\n")
+
+# Show missing values by column (if any)
+if (sum(missing_counts) > 0) {
+  print(missing_counts[missing_counts > 0])
+} else {
+  cat("No missing values in the dataset.")
+}
+```
+
+## Target Variable Distribution
+
+```{r}
+# Distribution of Revenue (purchase vs. no purchase)
+shoppers %>%
+  count(Revenue) %>%
+  mutate(percentage = n / sum(n) * 100)
+```
+
+```{r}
+# Visualize target variable
+ggplot(shoppers, aes(x = factor(Revenue), fill = factor(Revenue))) +
+  geom_bar() +
+  scale_fill_manual(values = c("FALSE" = "steelblue", "TRUE" = "coral"),
+                    labels = c("No Purchase", "Purchase")) +
+  labs(title = "Distribution of Purchase Outcome",
+       x = "Revenue (Purchase Made)",
+       y = "Count",
+       fill = "Outcome") +
+  scale_x_discrete(labels = c("No Purchase", "Purchase")) +
+  theme_minimal()
+```
+
+## Page Visit Variables
+
+The dataset tracks three types of pages visited: Administrative, Informational, and Product Related. For each type, we have the number of pages visited and total time spent (duration).
+
+```{r}
+# Summary of page visit counts
+shoppers %>%
+  select(Administrative, Informational, ProductRelated) %>%
+  pivot_longer(everything(), names_to = "Page_Type", values_to = "Count") %>%
+  ggplot(aes(x = Page_Type, y = Count, fill = Page_Type)) +
+  geom_boxplot() +
+  scale_fill_brewer(palette = "Set2") +
+  labs(title = "Distribution of Page Visits by Type",
+       x = "Page Type",
+       y = "Number of Pages Visited") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  coord_cartesian(ylim = c(0, 50))
+```
+
+```{r}
+# Summary of page durations
+shoppers %>%
+  select(Administrative_Duration, Informational_Duration, ProductRelated_Duration) %>%
+  pivot_longer(everything(), names_to = "Page_Type", values_to = "Duration") %>%
+  mutate(Page_Type = str_remove(Page_Type, "_Duration")) %>%
+  ggplot(aes(x = Page_Type, y = Duration, fill = Page_Type)) +
+  geom_boxplot() +
+  scale_fill_brewer(palette = "Set2") +
+  labs(title = "Distribution of Time Spent by Page Type",
+       x = "Page Type",
+       y = "Duration (seconds)") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  coord_cartesian(ylim = c(0, 500))
+```
+
+## Bounce and Exit Rates
+
+```{r}
+# Bounce rates and exit rates by purchase outcome
+shoppers %>%
+  select(BounceRates, ExitRates, Revenue) %>%
+  pivot_longer(c(BounceRates, ExitRates), names_to = "Metric", values_to = "Rate") %>%
+  ggplot(aes(x = factor(Revenue), y = Rate, fill = factor(Revenue))) +
+  geom_boxplot() +
+  facet_wrap(~Metric) +
+  scale_fill_manual(values = c("FALSE" = "steelblue", "TRUE" = "coral"),
+                    labels = c("No Purchase", "Purchase")) +
+  labs(title = "Bounce and Exit Rates by Purchase Outcome",
+       x = "Revenue",
+       y = "Rate",
+       fill = "Outcome") +
+  scale_x_discrete(labels = c("No", "Yes")) +
+  theme_minimal()
+```
+
+## Page Values
+
+```{r}
+# Distribution of PageValues by purchase outcome
+ggplot(shoppers, aes(x = PageValues, fill = factor(Revenue))) +
+  geom_histogram(binwidth = 5, position = "stack", color = "white") +
+  scale_fill_manual(values = c("FALSE" = "steelblue", "TRUE" = "coral"),
+                    labels = c("No Purchase", "Purchase")) +
+  labs(title = "Distribution of Page Values",
+       x = "Page Values",
+       y = "Count",
+       fill = "Outcome") +
+  theme_minimal() +
+  coord_cartesian(xlim = c(0, 100))
+```
+
+## Visitor Type
+
+```{r}
+# Sessions by visitor type
+shoppers %>%
+  count(VisitorType) %>%
+  mutate(percentage = round(n / sum(n) * 100, 1)) %>%
+  ggplot(aes(x = reorder(VisitorType, -n), y = n, fill = VisitorType)) +
+  geom_bar(stat = "identity") +
+  scale_fill_brewer(palette = "Set2") +
+  labs(title = "Sessions by Visitor Type",
+       x = "Visitor Type",
+       y = "Count") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+```{r}
+# Purchase rate by visitor type
+shoppers %>%
+  group_by(VisitorType) %>%
+  summarise(purchase_rate = mean(Revenue == TRUE) * 100,
+            count = n()) %>%
+  ggplot(aes(x = reorder(VisitorType, -purchase_rate), y = purchase_rate, fill = VisitorType)) +
+  geom_bar(stat = "identity") +
+  scale_fill_brewer(palette = "Set2") +
+  labs(title = "Purchase Rate by Visitor Type",
+       x = "Visitor Type",
+       y = "Purchase Rate (%)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+## Monthly Patterns
+
+```{r}
+# Order months chronologically
+month_order <- c("Feb", "Mar", "May", "June", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+shoppers %>%
+  mutate(Month = factor(Month, levels = month_order)) %>%
+  group_by(Month) %>%
+  summarise(sessions = n(),
+            purchase_rate = mean(Revenue == TRUE) * 100) %>%
+  ggplot(aes(x = Month)) +
+  geom_bar(aes(y = sessions), stat = "identity", fill = "steelblue", alpha = 0.7) +
+  geom_line(aes(y = purchase_rate * max(shoppers %>% count(Month) %>% pull(n)) / 100, group = 1),
+            color = "coral", linewidth = 1.2) +
+  geom_point(aes(y = purchase_rate * max(shoppers %>% count(Month) %>% pull(n)) / 100),
+             color = "coral", size = 3) +
+  scale_y_continuous(
+    name = "Number of Sessions",
+    sec.axis = sec_axis(~ . / max(shoppers %>% count(Month) %>% pull(n)) * 100,
+                        name = "Purchase Rate (%)")
+  ) +
+  labs(title = "Sessions and Purchase Rate by Month",
+       x = "Month") +
+  theme_minimal()
+```
+
+## Weekend vs. Weekday
+
+```{r}
+# Purchase rate: weekend vs. weekday
+shoppers %>%
+  group_by(Weekend) %>%
+  summarise(purchase_rate = mean(Revenue == TRUE) * 100,
+            count = n()) %>%
+  ggplot(aes(x = factor(Weekend, labels = c("Weekday", "Weekend")),
+             y = purchase_rate, fill = factor(Weekend))) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("FALSE" = "steelblue", "TRUE" = "coral")) +
+  labs(title = "Purchase Rate: Weekend vs. Weekday",
+       x = "",
+       y = "Purchase Rate (%)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+## Correlation Analysis
+
+```{r fig.width=10, fig.height=10}
+# Select numeric columns for correlation
+numeric_shoppers <- shoppers %>%
+  mutate(Revenue = as.numeric(Revenue),
+         Weekend = as.numeric(Weekend)) %>%
+  select(where(is.numeric))
+
+# Compute correlation matrix
+cor_matrix <- cor(numeric_shoppers, use = "complete.obs")
+
+# Visualize correlation matrix
+corrplot(cor_matrix, method = "color", type = "upper",
+         tl.cex = 0.7, tl.col = "black",
+         title = "Correlation Matrix",
+         mar = c(0, 0, 2, 0))
+```
+
+```{r}
+# Correlations with Revenue
+revenue_cors <- cor_matrix[, "Revenue"] %>%
+  sort(decreasing = TRUE)
+
+cat("Correlations with Revenue:\n")
+print(round(revenue_cors, 3))
+```
+
+## Key Relationships
+
+```{r}
+# Product Related Duration by purchase outcome
+ggplot(shoppers, aes(x = factor(Revenue), y = ProductRelated_Duration, fill = factor(Revenue))) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("FALSE" = "steelblue", "TRUE" = "coral"),
+                    labels = c("No Purchase", "Purchase")) +
+  labs(title = "Product Related Duration by Purchase Outcome",
+       x = "Revenue",
+       y = "Duration (seconds)",
+       fill = "Outcome") +
+  scale_x_discrete(labels = c("No Purchase", "Purchase")) +
+  theme_minimal() +
+  coord_cartesian(ylim = c(0, 5000))
+```
+
+```{r}
+# Exit Rates vs. Page Values colored by Revenue
+ggplot(shoppers, aes(x = ExitRates, y = PageValues, color = factor(Revenue))) +
+  geom_point(alpha = 0.3, size = 1) +
+  scale_color_manual(values = c("FALSE" = "steelblue", "TRUE" = "coral"),
+                     labels = c("No Purchase", "Purchase")) +
+  labs(title = "Exit Rates vs. Page Values",
+       x = "Exit Rate",
+       y = "Page Values",
+       color = "Outcome") +
+  theme_minimal()
+```
